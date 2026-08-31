@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>City Fortune</title>
+<meta name="description" content="Roll around a pop-up paper city, collect properties, and complete timed board albums.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-screen="loading">
+
+<a class="skip-link" href="#main">Skip to main content</a>
+<div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
+<div id="captions" class="captions" aria-hidden="true"></div>
+
+<main id="main">
+
+  <!-- Loading -->
+  <section id="screen-loading" class="screen" aria-label="Loading">
+    <div class="panel center">
+      <h1>City Fortune</h1>
+      <p>Unfolding the paper city…</p>
+      <noscript><p><strong>JavaScript is required to play.</strong></p></noscript>
+    </div>
+  </section>
+
+  <!-- Title -->
+  <section id="screen-title" class="screen" hidden aria-labelledby="title-h">
+    <div class="panel center title-panel">
+      <h1 id="title-h">City Fortune</h1>
+      <p class="tagline">A pop-up paper city. Roll, collect, complete the album.</p>
+      <button id="btn-play" class="primary big" data-autofocus>Play</button>
+      <button id="btn-title-daily" class="big">Daily challenge</button>
+      <p id="title-daily" class="muted"></p>
+      <p id="title-progress" class="muted"></p>
+      <nav class="row" aria-label="More">
+        <button id="btn-title-boards">Leaderboards</button>
+        <button id="btn-title-achievements">Achievements</button>
+        <button id="btn-title-settings">Settings</button>
+        <button id="btn-title-help">Help</button>
+      </nav>
+    </div>
+  </section>
+
+  <!-- Mode select -->
+  <section id="screen-modes" class="screen" hidden aria-labelledby="modes-h">
+    <div class="panel wide">
+      <h1 id="modes-h">Choose a mode</h1>
+      <div class="mode-grid">
+        <section aria-labelledby="journey-h">
+          <h2 id="journey-h">Journey</h2>
+          <ol id="journey-list" class="scroll-list"></ol>
+        </section>
+        <section aria-labelledby="daily-h">
+          <h2 id="daily-h">Daily</h2>
+          <p class="muted">One shared seed per UTC day.</p>
+          <button id="btn-modes-daily" onclick="document.getElementById('btn-title-daily').click()">Play today’s daily</button>
+          <h2>Challenges</h2>
+          <ol id="challenge-list" class="scroll-list"></ol>
+        </section>
+        <section aria-labelledby="practice-h">
+          <h2 id="practice-h">Practice</h2>
+          <ol id="practice-list"></ol>
+          <h2>Learn</h2>
+          <ol id="lesson-list"></ol>
+        </section>
+      </div>
+      <button id="btn-modes-back">Back</button>
+    </div>
+  </section>
+
+  <!-- Game -->
+  <section id="screen-game" class="screen game-screen" hidden aria-labelledby="hud-objective">
+    <div id="webgl-warning" class="banner" hidden>
+      3D view is unavailable in this browser — playing with the accessible board list. Your progress is safe.
+    </div>
+
+    <div class="game-grid">
+      <!-- left rail: objective + album -->
+      <aside class="rail rail-left" aria-labelledby="hud-objective">
+        <h2 id="hud-objective">Album</h2>
+        <ol id="hud-album"></ol>
+        <p id="hud-rival" class="muted" hidden></p>
+      </aside>
+
+      <!-- center: playfield -->
+      <div class="playfield">
+        <div id="canvas-wrap">
+          <canvas id="board-canvas" aria-label="3D city board" role="img"></canvas>
+        </div>
+        <p id="selection-desc" class="selection-desc" aria-live="polite"></p>
+        <div class="status-row" role="group" aria-label="Status">
+          <span id="hud-phase"></span>
+          <span id="hud-turn"></span>
+          <span id="hud-timer" hidden></span>
+          <span id="hud-coins"></span>
+          <span id="hud-score"></span>
+        </div>
+        <!-- action tray -->
+        <div class="tray" role="group" aria-label="Actions">
+          <button id="btn-roll" class="primary" data-autofocus>Roll</button>
+          <button id="btn-buy">Buy</button>
+          <button id="btn-skip">Skip</button>
+          <button id="btn-build">Build</button>
+          <button id="btn-undo" title="U">Undo</button>
+          <button id="btn-hint" title="H">Hint</button>
+          <button id="btn-pause" aria-label="Pause">⏸</button>
+          <button id="btn-friends" aria-label="Friends">☺</button>
+          <button id="btn-mirror-toggle" aria-label="Toggle board list">☰</button>
+          <button id="btn-album-toggle" class="compact-only">Album</button>
+          <button id="btn-news-toggle" class="compact-only">News</button>
+        </div>
+        <ol id="board-mirror" class="board-mirror" aria-label="Board tiles" tabindex="0"></ol>
+      </div>
+
+      <!-- right rail: event log -->
+      <aside class="rail rail-right" aria-label="Event log">
+        <h2>City news</h2>
+        <ol id="event-log" class="scroll-list" aria-live="off"></ol>
+      </aside>
+    </div>
+
+    <!-- lesson card -->
+    <div id="lesson-card" class="lesson-card" hidden role="note" aria-labelledby="lesson-title">
+      <h3 id="lesson-title"></h3>
+      <p id="lesson-text"></p>
+      <button id="btn-lesson-close">Got it</button>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="screen-results" class="screen" hidden aria-labelledby="results-headline">
+    <div class="panel center">
+      <h1 id="results-headline"></h1>
+      <p id="results-reason"></p>
+      <table class="breakdown">
+        <caption class="sr-only">Score breakdown</caption>
+        <tbody id="results-breakdown"></tbody>
+      </table>
+      <ul id="results-achievements" class="ach-row"></ul>
+      <p id="results-progress" class="muted"></p>
+      <p id="results-server" class="muted"></p>
+      <div class="row">
+        <button id="btn-results-next" class="primary" hidden data-autofocus></button>
+        <button id="btn-results-retry">Retry</button>
+        <button id="btn-results-menu">Modes</button>
+        <button id="btn-results-title">Title</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Overlays -->
+<div id="overlay-setup" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="setup-title">
+  <div class="panel">
+    <h2 id="setup-title"></h2>
+    <dl id="setup-rules" class="rules-dl"></dl>
+    <div class="row">
+      <button id="btn-setup-start" class="primary" data-autofocus>Start</button>
+      <button id="btn-setup-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-pause" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-h">
+  <div class="panel">
+    <h2 id="pause-h">Paused</h2>
+    <div class="col">
+      <button id="btn-resume" class="primary" data-autofocus>Resume</button>
+      <button id="btn-pause-settings">Settings</button>
+      <button id="btn-pause-help">Help</button>
+      <button id="btn-leave">Leave round</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-settings" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="settings-h">
+  <div class="panel scrollable">
+    <h2 id="settings-h">Settings</h2>
+    <fieldset>
+      <legend>Audio</legend>
+      <label>Music <input id="set-music" type="range" min="0" max="1" step="0.05"></label>
+      <label>Effects <input id="set-effects" type="range" min="0" max="1" step="0.05"></label>
+      <label>Ambience <input id="set-ambience" type="range" min="0" max="1" step="0.05"></label>
+      <label>Voice <input id="set-voice" type="range" min="0" max="1" step="0.05"></label>
+      <label><input id="set-muted" type="checkbox"> Mute all</label>
+      <label><input id="set-captions" type="checkbox"> Captions for sounds</label>
+    </fieldset>
+    <fieldset>
+      <legend>Graphics</legend>
+      <label>Quality tier
+        <select id="set-tier">
+          <option value="auto">Auto</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </label>
+      <label>Theme <select id="set-theme"></select></label>
+      <label>Color palette
+        <select id="set-palette">
+          <option value="standard">Standard</option>
+          <option value="high-visibility">High visibility</option>
+        </select>
+      </label>
+    </fieldset>
+    <fieldset>
+      <legend>Accessibility &amp; controls</legend>
+      <label><input id="set-reduced-motion" type="checkbox"> Reduced motion</label>
+      <label><input id="set-high-contrast" type="checkbox"> High contrast</label>
+      <label><input id="set-large-text" type="checkbox"> Larger text</label>
+      <label><input id="set-left-handed" type="checkbox"> Left-handed controls</label>
+      <label><input id="set-haptics" type="checkbox"> Haptics</label>
+      <label><input id="set-board-mirror" type="checkbox"> Always show board list</label>
+      <label><input id="set-confirm-moves" type="checkbox"> Confirm buys and builds</label>
+    </fieldset>
+    <button id="btn-settings-close" class="primary" data-autofocus>Done</button>
+  </div>
+</div>
+
+<div id="overlay-help" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="help-h">
+  <div class="panel scrollable">
+    <h2 id="help-h">How to play</h2>
+    <div id="help-content" class="help-grid"></div>
+    <button id="btn-help-close" class="primary" data-autofocus>Close</button>
+  </div>
+</div>
+
+<div id="overlay-achievements" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ach-h">
+  <div class="panel scrollable">
+    <h2 id="ach-h">Achievements</h2>
+    <ul id="achievements-list"></ul>
+    <button id="btn-achievements-close" class="primary" data-autofocus>Close</button>
+  </div>
+</div>
+
+<div id="overlay-boards" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="boards-h">
+  <div class="panel scrollable">
+    <h2 id="boards-h">Leaderboards</h2>
+    <ol id="boards-list"></ol>
+    <button id="btn-boards-close" class="primary" data-autofocus>Close</button>
+  </div>
+</div>
+
+<div id="overlay-friends" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="friends-h">
+  <div class="panel">
+    <h2 id="friends-h">Friends</h2>
+    <ul id="friends-list"></ul>
+    <button id="btn-friends-close" class="primary" data-autofocus>Close</button>
+  </div>
+</div>
+
+<script src="js/rng.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/content.js"></script>
+<script src="js/store.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

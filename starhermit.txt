@@ -1,0 +1,3 @@
+name=City Fortune
+launch=index.html
+server=server.js

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!-- Headless smoke driver: boots the real UI and plays a practice round. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>smoke</title></head>
+<body>
+<script>
+fetch('/index.html').then(r => r.text()).then(html => {
+  const docHtml = html.substring(html.indexOf('<body>') + 6, html.indexOf('<script src="js/rng.js">'));
+  document.body.innerHTML = docHtml;
+  const links = ['/css/style.css'];
+  const scripts = ['/js/rng.js','/js/rules.js','/js/content.js','/js/store.js','/js/audio.js','/js/game.js','/js/render.js','/js/ui.js'];
+  let chain = Promise.resolve();
+  scripts.forEach(src => { chain = chain.then(() => new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej;
+    document.body.appendChild(s);
+  })); });
+  return chain;
+}).then(() => import('/vendor/three.module.min.js')).then(THREE => {
+  window.THREE = THREE;
+  window.CFUI.boot();
+  const $ = id => document.getElementById(id);
+  const tick = () => new Promise(r => setTimeout(r, 60));
+  (async () => {
+    await tick();
+    console.log('SMOKE screen=' + document.body.dataset.screen);
+    $('btn-play').click(); await tick();
+    console.log('SMOKE screen=' + document.body.dataset.screen);
+    // first practice preset via setup
+    document.querySelector('#practice-list button').click(); await tick();
+    $('btn-setup-start').click(); await tick();
+    console.log('SMOKE screen=' + document.body.dataset.screen);
+    let moves = 0;
+    while (document.body.dataset.screen === 'game' && moves < 3000) {
+      const roll = $('btn-roll'), buy = $('btn-buy'), skip = $('btn-skip'), build = $('btn-build');
+      if (!buy.disabled && Math.random() < 0.7) buy.click();
+      else if (!buy.disabled) skip.click();
+      else if (!build.disabled && Math.random() < 0.3) build.click();
+      else if (!roll.disabled) roll.click();
+      moves++;
+      await tick();
+    }
+    console.log('SMOKE screen=' + document.body.dataset.screen + ' moves=' + moves);
+    console.log('SMOKE headline=' + $('results-headline').textContent);
+    console.log('SMOKE breakdown=' + $('results-breakdown').textContent.replace(/\s+/g, ' ').slice(0, 120));
+    // retry button works
+    $('btn-results-retry').click(); await tick();
+    console.log('SMOKE after-retry screen=' + document.body.dataset.screen);
+    // pause/resume
+    $('btn-pause').click(); await tick();
+    console.log('SMOKE pause-open=' + !$('overlay-pause').hidden);
+    $('btn-resume').click(); await tick();
+    console.log('SMOKE pause-closed=' + $('overlay-pause').hidden);
+    // keyboard roll
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await tick();
+    console.log('SMOKE keyboard-ok');
+    // save persisted
+    console.log('SMOKE save=' + (localStorage.getItem('cityfortune.save.v1') || '').slice(0, 40));
+    console.log('SMOKE-OK');
+  })().catch(e => console.error('SMOKE-FAIL ' + (e && e.stack || e)));
+}).catch(e => console.error('SMOKE-FAIL ' + (e && e.stack || e)));
+</script>
+</body>
+</html>

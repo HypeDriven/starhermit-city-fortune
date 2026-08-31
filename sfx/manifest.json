@@ -1,0 +1,98 @@
+[
+  {
+    "name": "dice-rattle",
+    "seconds": 2,
+    "prompt": "Two plastic dice rattling inside a small cup, then tumbling and bouncing across a wooden board game surface",
+    "event": "dice"
+  },
+  {
+    "name": "pawn-hop",
+    "seconds": 1,
+    "prompt": "A small wooden game pawn hopping one tile with a light tap on a cardboard game board",
+    "event": "hop"
+  },
+  {
+    "name": "piece-land",
+    "seconds": 1,
+    "prompt": "A wooden game piece landing with a firm soft thud on a thick cardboard board",
+    "event": "land"
+  },
+  {
+    "name": "coin-clink",
+    "seconds": 1,
+    "prompt": "A few small metal coins clinking together in an open hand",
+    "event": "coin"
+  },
+  {
+    "name": "salary-register",
+    "seconds": 2,
+    "prompt": "A vintage cash register bell ding followed by its metal drawer sliding open with coin clatter",
+    "event": "salary"
+  },
+  {
+    "name": "buy-stamp",
+    "seconds": 2,
+    "prompt": "A rubber stamp pressing firmly onto paper with a thump, then a cheerful cash register chime",
+    "event": "buy"
+  },
+  {
+    "name": "build-hammer",
+    "seconds": 2,
+    "prompt": "Two hammer taps driving a nail into wood, ending with a small wooden clunk of a toy house being set down",
+    "event": "build"
+  },
+  {
+    "name": "rent-collect",
+    "seconds": 2,
+    "prompt": "A handful of coins pouring into a tin cash box with a bright pleasant jingle",
+    "event": "rent-get"
+  },
+  {
+    "name": "rent-pay",
+    "seconds": 2,
+    "prompt": "Coins being counted out one by one onto a wooden counter with a subdued low slide",
+    "event": "rent-pay"
+  },
+  {
+    "name": "card-flip",
+    "seconds": 1,
+    "prompt": "A single playing card being flipped face-up onto a felt table with a quick snap",
+    "event": "card"
+  },
+  {
+    "name": "sticker-press",
+    "seconds": 1,
+    "prompt": "A paper sticker being peeled off its backing and pressed firmly onto an album page",
+    "event": "sticker"
+  },
+  {
+    "name": "page-turn",
+    "seconds": 2,
+    "prompt": "A thick glossy paper album page turning over with a crisp slow rustle",
+    "event": "page"
+  },
+  {
+    "name": "win-fanfare",
+    "seconds": 3,
+    "prompt": "A small brass band playing a short victory fanfare with party poppers and light applause",
+    "event": "win"
+  },
+  {
+    "name": "lose-trombone",
+    "seconds": 2,
+    "prompt": "A muted trombone playing a short descending womp-womp sad phrase",
+    "event": "lose"
+  },
+  {
+    "name": "ui-click",
+    "seconds": 1,
+    "prompt": "A short soft plastic button click on a handheld electronic device",
+    "event": "ui"
+  },
+  {
+    "name": "invalid-thud",
+    "seconds": 1,
+    "prompt": "A dull wooden block knock, a firm muted thud signaling a rejected action",
+    "event": "invalid"
+  }
+]

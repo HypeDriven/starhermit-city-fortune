@@ -1,0 +1,11 @@
+{
+  "name": "city-fortune",
+  "version": "1.0.0",
+  "description": "City Fortune — asynchronous social board game in a pop-up paper city.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run-tests.js",
+    "validate": "node tools/validate.js"
+  }
+}
