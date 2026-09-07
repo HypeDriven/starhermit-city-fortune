@@ -6,6 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "test": "node tests/run-tests.js",
+    "test:e2e": "node tests/e2e.mjs",
     "validate": "node tools/validate.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
   }
 }

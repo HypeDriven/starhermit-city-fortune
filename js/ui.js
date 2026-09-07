@@ -17,6 +17,7 @@
   var lesson = null;         // active tutorial lesson (Learn mode)
   var lessonStep = 0;
   var presenting = false;    // input locked during event resolution
+  var skipping = false;      // fast-forward the current event presentation
   var selectedTile = null;
   var focusTargets = [];     // keyboard-navigable tile indexes
   var focusIdx = 0;
@@ -24,8 +25,8 @@
   var serverOffsetMs = 0;    // serverTime - clientTime
   var clock = { accumMs: 0, sinceMs: 0, running: false };
   var currentScreen = 'loading';
-  var overlayStack = [];
-  var lastFocus = null;
+  var appliedPaletteHC = null; // last high-visibility palette pushed to the board
+  var overlayStack = [];   // [{ id, prev }] — innermost dialog last
 
   // ---------- time ----------
   function nowMs() { return Date.now(); }
@@ -72,12 +73,20 @@
     if (first) first.focus();
   }
 
+  // Background content is inert while a modal overlay is open: screen readers
+  // and Tab stay inside the dialog.
+  function syncInert() {
+    var m = $('main');
+    if (m) m.inert = overlayStack.length > 0;
+  }
+
   function openOverlay(id) {
     var el = $(id);
     if (!el || !el.hidden) return;
-    lastFocus = document.activeElement;
+    var prev = document.activeElement;
     el.hidden = false;
-    overlayStack.push(id);
+    overlayStack.push({ id: id, prev: prev });
+    syncInert();
     var f = el.querySelector('[data-autofocus]') || el.querySelector('button, input, select');
     if (f) f.focus();
     Audio.play('ui');
@@ -86,15 +95,33 @@
     var el = $(id);
     if (!el || el.hidden) return;
     el.hidden = true;
-    overlayStack = overlayStack.filter(function (x) { return x !== id; });
-    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+    var back = null;
+    overlayStack = overlayStack.filter(function (x) {
+      if (x.id !== id) return true;
+      back = x.prev;
+      return false;
+    });
+    syncInert();
+    // restore focus to whatever opened this overlay, if it is still usable
+    if (back && document.contains(back) && back.offsetParent !== null) back.focus();
+    else {
+      var top = overlayStack[overlayStack.length - 1];
+      var host = top && $(top.id);
+      var f = host && (host.querySelector('[data-autofocus]') || host.querySelector('button, input, select'));
+      if (f) f.focus();
+    }
   }
   function closeTopOverlay() {
     if (!overlayStack.length) return false;
-    closeOverlay(overlayStack[overlayStack.length - 1]);
+    closeOverlay(overlayStack[overlayStack.length - 1].id);
     return true;
   }
   function anyOverlayOpen() { return overlayStack.length > 0; }
+
+  // Resume the round clock only when nothing is covering the board.
+  function maybeResumeClock() {
+    if (currentScreen === 'game' && sess && !sess.state.terminal && !anyOverlayOpen()) clockStart();
+  }
 
   // ---------- title / menus ----------
 
@@ -193,12 +220,15 @@
   // ---------- game start ----------
 
   function startGame(cfg, mode, lessonObj) {
-    sess = Game.createSession(cfg, lessonObj || null, elapsedMs());
+    // wall-clock seed: session ids must be unique per round, not per game clock
+    sess = Game.createSession(cfg, lessonObj || null, serverNowMs());
     lesson = lessonObj || null;
     lessonStep = 0;
     selectedTile = null;
     clockReset();
     presenting = false;
+    // Retry always replays what is actually on screen (journey "Next", lessons)
+    setupCfg = cfg; setupMode = mode;
 
     var theme = Content.THEMES.find(function (t) { return t.id === (cfg.theme || doc.settings.theme); }) || Content.THEMES[0];
     if (Render.isAvailable()) {
@@ -206,6 +236,8 @@
       Render.syncState(sess.state, null, { instant: true });
     }
     Audio.setAvRng(RNG.derive(cfg.seed, RNG.STREAM_AV));
+    $('event-log').innerHTML = '';   // a new round starts with fresh city news
+    $('selection-desc').textContent = '';
     show('game');
     clockStart();
     updateHUD();
@@ -214,6 +246,8 @@
     else $('lesson-card').hidden = true;
     announce(cfg.name + '. ' + describeRules(cfg) + '. Your turn: roll the die.');
     logEvent('Welcome to ' + cfg.name + '. ' + (cfg.intro || ''));
+    // a lesson may open directly on a deed offer: surface it like any other
+    if (sess.state.phase === 'buy' && sess.state.pending) promptBuy();
   }
 
   function startLesson(ls) {
@@ -388,12 +422,18 @@
 
   function presentEvents(events, done) {
     presenting = true;
+    skipping = false;
     updateActionButtons();
-    var delay = doc.settings.reducedMotion ? 60 : 320;
     var i = 0;
+    function delay() {
+      if (skipping) return 0;
+      return doc.settings.reducedMotion ? 60 : 320;
+    }
     function step() {
+      if (!sess) { presenting = false; return; } // round left mid-presentation
       if (i >= events.length) {
         presenting = false;
+        skipping = false;
         if (Render.isAvailable()) Render.settle();
         if (Render.isAvailable()) Render.syncState(sess.state, null, { instant: true });
         updateHUD();
@@ -408,15 +448,16 @@
       var text = eventText(ev);
       logEvent(text);
       announce(text);
-      if (Render.isAvailable()) Render.syncState(sess.state, [ev], { instant: doc.settings.reducedMotion });
-      setTimeout(step, delay);
+      if (Render.isAvailable()) Render.syncState(sess.state, [ev], { instant: skipping || doc.settings.reducedMotion });
+      setTimeout(step, delay());
     }
     step();
   }
 
   function skipPresentation() {
-    // settle everything immediately into the exact deterministic end state
-    if (Render.isAvailable()) {
+    // flush the remaining event beats and settle the board into its end state
+    skipping = true;
+    if (Render.isAvailable() && sess) {
       Render.settle();
       Render.syncState(sess.state, null, { instant: true });
     }
@@ -509,10 +550,17 @@
     if (Render.isAvailable()) Render.setSelection(selectedTile);
     updateActionButtons();
     describeSelection();
+    var mirror = $('board-mirror');
+    if (mirror) {
+      Array.prototype.forEach.call(mirror.querySelectorAll('.mirror-tile'), function (b) {
+        b.setAttribute('aria-pressed', +b.dataset.tile === selectedTile ? 'true' : 'false');
+      });
+    }
   }
 
   function describeSelection() {
-    if (selectedTile == null || !sess) return;
+    if (!sess) return;
+    if (selectedTile == null) { $('selection-desc').textContent = ''; return; }
     var t = sess.state.cfg.tiles[selectedTile];
     var s = sess.state;
     var parts = [t.label || ('Tile ' + selectedTile), tileKindLabel(t)];
@@ -555,12 +603,18 @@
   function renderBoardMirror() {
     var el = $('board-mirror');
     if (!el || !sess) return;
+    // keep keyboard focus on the same tile across HUD refreshes
+    var focusedIdx = null;
+    if (document.activeElement && el.contains(document.activeElement)) {
+      focusedIdx = +document.activeElement.dataset.tile;
+    }
     el.innerHTML = '';
     var s = sess.state;
     s.cfg.tiles.forEach(function (t, i) {
       var li = document.createElement('li');
       var label = t.label || ('Tile ' + i);
       var parts = [i === 0 ? 'Start' : label, tileKindLabel(t)];
+      if (parts[0] === parts[1]) parts.pop();   // "Start, Start" reads badly
       if (t.t === 'prop') {
         var owner = Rules.ownerOf(s, i);
         if (owner === 'you') parts.push('owned by you, level ' + s.you.props[i]);
@@ -569,10 +623,34 @@
       }
       if (s.you.pos === i) parts.push('you are here');
       if (s.rival && s.rival.pos === i) parts.push(s.rival.name + ' is here');
-      li.textContent = parts.join(', ');
+      // the mirror is the playable surface without WebGL: every tile selectable
+      var b = document.createElement('button');
+      b.className = 'mirror-tile';
+      b.type = 'button';
+      b.dataset.tile = String(i);
+      b.textContent = parts.join(', ');
+      b.setAttribute('aria-pressed', selectedTile === i ? 'true' : 'false');
+      b.addEventListener('click', function () { selectTile(i); });
+      li.appendChild(b);
       if (s.you.pos === i) li.className = 'here';
       el.appendChild(li);
     });
+    if (focusedIdx != null && !isNaN(focusedIdx)) {
+      var back = el.querySelector('[data-tile="' + focusedIdx + '"]');
+      if (back) back.focus();
+    }
+  }
+
+  // Single selection entry point shared by the canvas, the mirror and the keys.
+  function selectTile(idx) {
+    if (!sess) return;
+    selectedTile = idx;
+    focusIdx = idx;
+    syncSelection();
+    Audio.play('select');
+    var t = sess.state.cfg.tiles[idx];
+    announce((t.label || 'Tile ' + idx) + ', ' + tileKindLabel(t) +
+      (buildLegal(idx).ok ? '. Build available (' + buildCostText(idx) + ').' : ''));
   }
 
   // ---------- round end / results ----------
@@ -752,7 +830,7 @@
     if (currentScreen === 'game' && !sess.state.terminal) clockStart();
   }
   function leaveRound() {
-    overlayStack.slice().forEach(closeOverlay);
+    overlayStack.slice().forEach(function (o) { closeOverlay(o.id); });
     clockStop();
     if (sess && !sess.state.terminal) {
       // abandoning counts as resign for stats honesty, but is not persisted as a result
@@ -807,16 +885,30 @@
     bindSelect('set-tier', 'graphicsTier');
     bindSelect('set-theme', 'theme');
     bindSelect('set-palette', 'colorPalette');
-    // populate theme options
+    populateThemes();
+  }
+
+  // Themes unlock with journey stars; locked ones stay visible but unselectable.
+  function populateThemes() {
     var themeSel = $('set-theme');
+    if (!themeSel) return;
+    var stars = 0;
+    for (var k in doc.progress.journeyStars) stars += doc.progress.journeyStars[k];
     themeSel.innerHTML = '';
     Content.THEMES.forEach(function (t) {
+      var locked = stars < (t.unlockStars || 0);
       var o = document.createElement('option');
       o.value = t.id;
-      o.textContent = t.name + (t.unlockStars > 0 ? ' (' + t.unlockStars + '★)' : '');
+      o.disabled = locked;
+      o.textContent = t.name + (t.unlockStars > 0 ? ' (' + t.unlockStars + '★' + (locked ? ' — locked' : '') + ')' : '');
       themeSel.appendChild(o);
     });
-    themeSel.value = s.theme;
+    var current = Content.THEMES.find(function (t) { return t.id === doc.settings.theme; });
+    if (!current || stars < (current.unlockStars || 0)) {
+      doc.settings.theme = Content.THEMES[0].id;
+      saveDoc();
+    }
+    themeSel.value = doc.settings.theme;
   }
 
   function applyAllSettings() {
@@ -838,6 +930,21 @@
       var tier = s.graphicsTier === 'auto' ? autoTier() : s.graphicsTier;
       Render.setQuality(tier);
       Render.setReducedMotion(s.reducedMotion);
+      // district stripe colors are baked at build time: rebuild when they change
+      var hc = s.colorPalette === 'high-visibility';
+      if (hc !== appliedPaletteHC) {
+        appliedPaletteHC = hc;
+        Render.setPaletteHC(hc);
+        if (sess) {
+          var theme = Content.THEMES.find(function (t) {
+            return t.id === (sess.state.cfg.theme || s.theme);
+          }) || Content.THEMES[0];
+          Render.buildBoard(sess.state.cfg, theme);
+          Render.syncState(sess.state, null, { instant: true });
+          Render.setSelection(selectedTile);
+          updateActionButtons();
+        }
+      }
     }
   }
 
@@ -967,13 +1074,7 @@
       if (!sess || presenting || currentScreen !== 'game') return;
       var idx = Render.isAvailable() ? Render.pick(e.clientX, e.clientY) : null;
       if (idx == null) { selectedTile = null; syncSelection(); Audio.play('deselect'); return; }
-      selectedTile = idx;
-      focusIdx = idx;
-      syncSelection();
-      Audio.play('select');
-      var t = sess.state.cfg.tiles[idx];
-      announce((t.label || 'Tile ' + idx) + ', ' + tileKindLabel(t) +
-        (buildLegal(idx).ok ? '. Build available (' + buildCostText(idx) + ').' : ''));
+      selectTile(idx);
     });
     canvas.addEventListener('pointercancel', function () { downPos = null; });
     canvas.addEventListener('lostpointercapture', function () { downPos = null; });
@@ -985,12 +1086,11 @@
       if (hidden) {
         if (currentScreen === 'game' && sess && !sess.state.terminal) {
           clockStop(); // solo simulation pauses in background
-          clockStart._wasRunning = true;
         }
         Audio.suspend();
       } else {
         Audio.resume();
-        if (currentScreen === 'game' && sess && !sess.state.terminal && !anyOverlayOpen()) clockStart();
+        maybeResumeClock();
       }
     });
 
@@ -1008,7 +1108,7 @@
     if (e.defaultPrevented) return;
     var inField = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName || '');
     if (e.key === 'Escape') {
-      if (anyOverlayOpen()) { closeTopOverlay(); if (currentScreen === 'game' && sess && !sess.state.terminal) clockStart(); }
+      if (anyOverlayOpen()) { closeTopOverlay(); maybeResumeClock(); }
       else if (currentScreen === 'game') pauseGame();
       e.preventDefault();
       return;
@@ -1055,7 +1155,6 @@
     var wrap = $('canvas-wrap');
     if (!wrap || !Render.isAvailable()) return;
     var r = wrap.getBoundingClientRect();
-    var size = Math.max(200, Math.min(r.width, r.height));
     Render.setViewport(Math.round(r.width), Math.round(r.height));
   }
 
@@ -1071,7 +1170,10 @@
     });
     on('btn-title-boards', function () { refreshBoards(); openOverlay('overlay-boards'); });
     on('btn-title-achievements', function () { refreshAchievements(); openOverlay('overlay-achievements'); });
-    on('btn-title-settings', function () { openOverlay('overlay-settings'); });
+    on('btn-title-settings', function () { populateThemes(); openOverlay('overlay-settings'); });
+    on('btn-modes-daily', function () {
+      openSetup(Content.dailyConfig(Content.utcDateString(serverNowMs())), 'daily');
+    });
     on('btn-title-help', function () { refreshHelp(); openOverlay('overlay-help'); });
     on('btn-modes-back', function () { show('title'); });
 
@@ -1108,15 +1210,15 @@
     });
 
     on('btn-resume', resumeGame);
-    on('btn-pause-settings', function () { openOverlay('overlay-settings'); });
+    on('btn-pause-settings', function () { populateThemes(); openOverlay('overlay-settings'); });
     on('btn-pause-help', function () { refreshHelp(); openOverlay('overlay-help'); });
     on('btn-leave', function () {
-      if (sess && !sess.state.terminal && sess.state.cfg.kind !== 'learn') {
+      if (sess && !sess.state.terminal && sess.state.cfg.kind !== 'tutorial') {
         dispatchResign();
       } else leaveRound();
     });
-    on('btn-settings-close', function () { closeOverlay('overlay-settings'); if (currentScreen === 'game' && sess && !sess.state.terminal) clockStart(); });
-    on('btn-help-close', function () { closeOverlay('overlay-help'); if (currentScreen === 'game' && sess && !sess.state.terminal) clockStart(); });
+    on('btn-settings-close', function () { closeOverlay('overlay-settings'); maybeResumeClock(); });
+    on('btn-help-close', function () { closeOverlay('overlay-help'); maybeResumeClock(); });
     on('btn-boards-close', function () { closeOverlay('overlay-boards'); });
     on('btn-achievements-close', function () { closeOverlay('overlay-achievements'); });
     on('btn-friends-close', function () { closeOverlay('overlay-friends'); });

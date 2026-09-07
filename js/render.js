@@ -31,7 +31,7 @@
     particles: [],
     props: [],             // decorative pop-up buildings inside the ring
     cfg: null, theme: null, palette: null,
-    quality: 'medium', reducedMotion: false,
+    quality: 'medium', reducedMotion: false, paletteHC: false,
     anims: [],             // [{dur, t, update(t01), done}]
     camShake: 0,
     raycaster: null, pointer: null,
@@ -88,6 +88,9 @@
 
   function setReducedMotion(on) { S.reducedMotion = !!on; }
 
+  // High-visibility district colors; takes effect on the next buildBoard.
+  function setPaletteHC(on) { S.paletteHC = !!on; }
+
   // ---------- board construction ----------
 
   function clearBoard() {
@@ -101,8 +104,10 @@
       S.scene.remove(S.board);
     }
     S.board = null; S.tileMeshes = []; S.tokens = {}; S.particles = []; S.anims = [];
-    S.marker = null; S.ghostHighlights = [];
+    S.marker = null; S.ghostHighlights = []; S.props = [];
     clearOwnershipMarks();
+    // every tracked resource belonged to the board that was just released
+    S.disposables = [];
   }
 
   function paperMat(color, rough) {
@@ -451,7 +456,6 @@
 
   // Fast-forward: settle every animation into its exact end state.
   function settle() {
-    var tk;
     var tk2;
     for (var key2 in S.tokens) { tk2 = S.tokens[key2]; if (tk2) { tk2.animT = 1; placeToken(tk2); } }
     S.anims.forEach(function (an) { an.update(1); if (an.done) an.done(); });
@@ -535,6 +539,7 @@
     buildBoard: buildBoard, clearOwnershipMarks: clearOwnershipMarks,
     syncState: syncState, update: update, settle: settle, render: render,
     setViewport: setViewport, setQuality: setQuality, setReducedMotion: setReducedMotion,
+    setPaletteHC: setPaletteHC,
     setSelection: setSelection, setHighlights: setHighlights,
     pick: pick, projectTile: projectTile,
     FRAMING: FRAMING, QUALITY: QUALITY
