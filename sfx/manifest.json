@@ -94,5 +94,59 @@
     "seconds": 1,
     "prompt": "A dull wooden block knock, a firm muted thud signaling a rejected action",
     "event": "invalid"
+  },
+  {
+    "name": "tile-tap",
+    "seconds": 1,
+    "prompt": "A single soft wooden tap, the tip of a small wooden pawn touching a cardboard game tile once, close-miked",
+    "event": "select"
+  },
+  {
+    "name": "paper-flick",
+    "seconds": 1,
+    "prompt": "A very short quiet paper flick, a fingertip lightly flicking the corner of a stiff paper card once, close-miked",
+    "event": "deselect"
+  },
+  {
+    "name": "card-slide",
+    "seconds": 1,
+    "prompt": "A single playing card being slid face-down across a felt table with a soft short brush",
+    "event": "skip"
+  },
+  {
+    "name": "toll-clink",
+    "seconds": 1,
+    "prompt": "A single old brass coin dropping into a metal toll box with one short dull clink",
+    "event": "toll"
+  },
+  {
+    "name": "bonus-coins",
+    "seconds": 1,
+    "prompt": "Three small metal coins landing in quick succession on a wooden table with bright cheerful clinks",
+    "event": "bonus"
+  },
+  {
+    "name": "rival-tap",
+    "seconds": 1,
+    "prompt": "A small wooden pawn tapping twice on a cardboard game board, quick and light, heard from slightly farther away",
+    "event": "rival"
+  },
+  {
+    "name": "paper-rewind",
+    "seconds": 1,
+    "prompt": "A sheet of paper being pulled back quickly across a wooden desk, a short reverse swish",
+    "event": "undo"
+  },
+  {
+    "name": "hint-bell",
+    "seconds": 1,
+    "prompt": "A tiny brass desk bell rung once, a soft bright single ding with a short decay",
+    "event": "hint"
+  },
+  {
+    "name": "star-chime",
+    "seconds": 1,
+    "prompt": "A single small glass chime struck once, a delicate bright tinkle fading quickly",
+    "event": "star"
   }
 ]

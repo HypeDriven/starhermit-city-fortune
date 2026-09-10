@@ -1,0 +1,29 @@
+# City Fortune — SFX manifest (canonical). One clip per line:
+# file | event id (CFAudio.play name, js/audio.js SFX map; triggered from js/ui.js) | description of the sound | usage context
+# Clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus 96 kbps VBR, loudness-normalised (I=-20 LUFS), 100 steps. All play on the effects bus;
+# every event also has a WebAudio synth fallback in js/audio.js that plays while the clip loads or if it is missing.
+dice-rattle.opus | dice | Two plastic dice rattling inside a small cup, then tumbling and bouncing across a wooden board game surface | Your roll event (EVENT_SFX.roll); the pawn starts moving right after
+pawn-hop.opus | hop | A small wooden game pawn hopping one tile with a light tap on a cardboard game board | Landing on Start, the park, your own property, or a card-driven move (park, own-visit, start-visit, card-move events)
+piece-land.opus | land | A wooden game piece landing with a firm soft thud on a thick cardboard board | Bound in audio.js; not triggered by any current UI event (reserved for a future landing beat)
+coin-clink.opus | coin | A few small metal coins clinking together in an open hand | Bound in audio.js; not triggered by any current UI event (reserved for coin-count changes)
+salary-register.opus | salary | A vintage cash register bell ding followed by its metal drawer sliding open with coin clatter | Passing Start or riding the Express Tram (lap event, +salary)
+buy-stamp.opus | buy | A rubber stamp pressing firmly onto paper with a thump, then a cheerful cash register chime | Deed bought by you or the rival (buy event)
+build-hammer.opus | build | Two hammer taps driving a nail into wood, ending with a small wooden clunk of a toy house being set down | Building upgrade placed on your property (build event)
+rent-collect.opus | rent-get | A handful of coins pouring into a tin cash box with a bright pleasant jingle | Rival lands on your property and pays rent (rent event, from=rival)
+rent-pay.opus | rent-pay | Coins being counted out one by one onto a wooden counter with a subdued low slide | You land on the rival's property and pay rent (rent event, from=you)
+card-flip.opus | card | A single playing card being flipped face-up onto a felt table with a quick snap | Chance card drawn by either side (card event)
+sticker-press.opus | sticker | A paper sticker being peeled off its backing and pressed firmly onto an album page | You land on a sticker tile (sticker event)
+page-turn.opus | page | A thick glossy paper album page turning over with a crisp slow rustle | Album page completed (page-complete event); also the Learn lesson-complete cue
+win-fanfare.opus | win | A small brass band playing a short victory fanfare with party poppers and light applause | Every album page done: round won (win event)
+lose-trombone.opus | lose | A muted trombone playing a short descending womp-womp sad phrase | Turn limit, time limit, or resign (lose and timeout events)
+ui-click.opus | ui | A short soft plastic button click on a handheld electronic device | Every accepted command and every overlay open; deck reshuffle and spent-deck notices
+invalid-thud.opus | invalid | A dull wooden block knock, a firm muted thud signaling a rejected action | Rules rejected a command (explainInvalid) and cannot-afford offers
+tile-tap.opus | select | A single soft wooden tap, the tip of a small wooden pawn touching a cardboard game tile once, close-miked | Tile selected by tap, board-list button, or arrow keys; deed offer opens (offer event)
+paper-flick.opus | deselect | A very short quiet paper flick, a fingertip lightly flicking the corner of a stiff paper card once, close-miked | Tap on empty board space clears the selection
+card-slide.opus | skip | A single playing card being slid face-down across a felt table with a soft short brush | You pass on an offered deed (skip event)
+toll-clink.opus | toll | A single old brass coin dropping into a metal toll box with one short dull clink | Either side lands on a toll tile (toll event)
+bonus-coins.opus | bonus | Three small metal coins landing in quick succession on a wooden table with bright cheerful clinks | Either side lands on a bonus tile (bonus event)
+rival-tap.opus | rival | A small wooden pawn tapping twice on a cardboard game board, quick and light, heard from slightly farther away | Rival's roll, rival passes on a deed, rival idles on a sticker tile (roll who=rival, rival-pass, rival-idle)
+paper-rewind.opus | undo | A sheet of paper being pulled back quickly across a wooden desk, a short reverse swish | Undo restored the previous turn (doUndo)
+hint-bell.opus | hint | A tiny brass desk bell rung once, a soft bright single ding with a short decay | Hint requested (doHint); the suggested tile is selected
+star-chime.opus | star | A single small glass chime struck once, a delicate bright tinkle fading quickly | Achievement unlocked at round end (checkAchievements)

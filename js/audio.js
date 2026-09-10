@@ -126,11 +126,20 @@
     'star':      function () { blip(1568, 0.18, 'sine', 0.1); }
   };
 
+  // Caption text per logical event, shown when "Captions for sounds" is on.
+  var CAPTIONS = {
+    select: 'select', invalid: 'not allowed', dice: 'dice roll', coin: 'coins', salary: 'salary',
+    buy: 'property bought', skip: 'passed', build: 'building up', 'rent-get': 'rent collected',
+    'rent-pay': 'rent paid', toll: 'toll', bonus: 'bonus', card: 'chance card', sticker: 'sticker',
+    page: 'album page complete', win: 'album complete', lose: 'round lost', undo: 'undo',
+    hint: 'hint', star: 'achievement', rival: 'rival moves', land: 'landed'
+  };
+
   function play(name) {
     if (!started || !ctx || settings.muted) return;
     if (ctx.state === 'suspended') ctx.resume();
     var sample = sampleFor(name);
-    if (sample) { playSample(sample); return; } // decoded sample wins
+    if (sample) { playSample(sample); caption(CAPTIONS[name]); return; } // decoded sample wins
     var fn = SFX[name];
     if (fn) fn(); // synthesized fallback while loading or on failure
   }

@@ -61,6 +61,21 @@ body {
   box-shadow: 0 6px 24px rgba(60, 45, 20, 0.18);
 }
 .panel.center { text-align: center; }
+
+/* Key art (assets/key-art.webp) above the title; hidden by onerror if missing. */
+.title-panel { max-width: min(92vw, 640px); padding-top: 0; overflow: hidden; }
+.title-art {
+  display: block; width: calc(100% + 48px); margin: 0 -24px 12px; height: auto;
+  max-height: min(38vh, 300px); object-fit: cover; object-position: center 62%;
+  border-bottom: 3px solid var(--accent);
+}
+/* Results illustration (assets/results-album.webp). */
+.results-panel { max-width: min(92vw, 640px); padding-top: 0; overflow: hidden; }
+.results-art {
+  display: block; width: calc(100% + 48px); margin: 0 -24px 10px; height: auto;
+  max-height: min(24vh, 180px); object-fit: cover; object-position: center 45%;
+  border-bottom: 3px solid var(--accent);
+}
 .panel.wide { max-width: min(96vw, 900px); }
 .panel.scrollable { max-height: 88vh; overflow-y: auto; }
 
@@ -201,6 +216,14 @@ fieldset input[type="range"] { width: 100%; max-width: 260px; vertical-align: mi
 .rule-card h3 { margin: 0 0 4px; font-size: 0.95rem; }
 .rule-card p { margin: 0; font-size: 0.88rem; }
 
+/* Paper grain (assets/paper-grain.webp) multiplied over the panel colour; a
+ * missing file simply leaves the flat colour. Off in high-contrast mode. */
+.panel, .rail, .status-row {
+  background-image: url("../assets/paper-grain.webp");
+  background-size: 256px 256px; background-blend-mode: multiply;
+}
+body.high-contrast .panel, body.high-contrast .rail, body.high-contrast .status-row { background-image: none; }
+
 /* ---------- accessibility modes ---------- */
 body.large-text { font-size: 1.2rem; }
 body.high-contrast {
@@ -240,6 +263,10 @@ body.left-handed .tray { flex-direction: row-reverse; }
 }
 
 /* landscape mobile: narrow status rail on the side */
+@media (max-height: 480px) {
+  .title-art { max-height: 22vh; }
+  .results-art { max-height: 14vh; }
+}
 @media (max-height: 480px) and (orientation: landscape) {
   .game-grid { grid-template-columns: 150px 1fr; grid-template-rows: 1fr; }
   .rail-right { display: none; }
@@ -250,6 +277,10 @@ body.left-handed .tray { flex-direction: row-reverse; }
 
 @media (max-width: 560px) {
   .panel { padding: 14px 16px; }
+  .title-panel, .results-panel { padding-top: 0; }
+  .title-art, .results-art { width: calc(100% + 32px); margin-left: -16px; margin-right: -16px; }
+  .title-art { max-height: 26vh; }
+  .results-art { max-height: 16vh; }
   h1 { font-size: 1.5rem; }
   p, li, dd { max-width: 70ch; }
 }
