@@ -243,13 +243,18 @@ body.left-handed .tray { flex-direction: row-reverse; }
 @media (max-width: 1023px) {
   .compact-only { display: inline-block; }
   .game-grid { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-  .rail { position: fixed; top: 0; bottom: 0; width: min(78vw, 300px); z-index: 30;
-          transition: transform 0.2s ease; }
+  /* drawers stop above the action tray so Roll/Pause/Album stay reachable */
+  .rail { position: fixed; top: 0; bottom: calc(64px + var(--safe-b)); width: min(78vw, 300px); z-index: 30;
+          transition: transform 0.2s ease, visibility 0.2s; visibility: hidden; overflow-y: auto;
+          padding-top: 48px; }
   .rail-left { left: 0; transform: translateX(-105%); }
   .rail-right { right: 0; transform: translateX(105%); }
-  .game-screen.rail-left-open .rail-left { transform: none; }
-  .game-screen.rail-right-open .rail-right { transform: none; }
+  .game-screen.rail-left-open .rail-left { transform: none; visibility: visible; }
+  .game-screen.rail-right-open .rail-right { transform: none; visibility: visible; }
   body.reduced-motion .rail { transition: none; }
+  .rail-close { position: absolute; top: 4px; right: 4px; min-width: 44px; min-height: 44px; }
+  .drawer-scrim { position: fixed; inset: 0; bottom: calc(64px + var(--safe-b)); z-index: 29; background: rgba(0,0,0,0.35); }
+  .drawer-scrim[hidden] { display: none; }
 }
 
 /* portrait mobile: status top, square playfield, thumb tray bottom */
@@ -258,8 +263,14 @@ body.left-handed .tray { flex-direction: row-reverse; }
   #canvas-wrap { flex: 0 0 auto; aspect-ratio: 1 / 1; width: 100%; }
   .playfield { flex: 1; }
   .status-row { order: -1; font-size: 0.85rem; gap: 8px; padding: 6px 8px; }
-  .tray { position: sticky; bottom: 0; background: var(--bg); padding: 6px 0 calc(6px + var(--safe-b)); }
+  .tray { position: sticky; bottom: 0; background: var(--bg); padding: 6px 0 calc(6px + var(--safe-b)); z-index: 31; }
   .tray button { flex: 1 1 30%; }
+  /* drawers open as a top sheet over the board; the tray stays clear below */
+  .rail { top: 0; bottom: auto; left: 0; right: 0; width: auto; max-height: 58vh;
+          transform: translateY(-105%); border-radius: 0 0 var(--radius) var(--radius); }
+  .rail-left, .rail-right { transform: translateY(-105%); }
+  .game-screen.rail-left-open .rail-left, .game-screen.rail-right-open .rail-right { transform: none; }
+  .drawer-scrim { bottom: 0; }
 }
 
 /* landscape mobile: narrow status rail on the side */
@@ -269,9 +280,12 @@ body.left-handed .tray { flex-direction: row-reverse; }
 }
 @media (max-height: 480px) and (orientation: landscape) {
   .game-grid { grid-template-columns: 150px 1fr; grid-template-rows: 1fr; }
-  .rail-right { display: none; }
-  .rail-left { position: static; transform: none; width: auto; font-size: 0.8rem; }
-  #canvas-wrap { min-height: 0; flex: 1; }
+  .rail-left { position: static; transform: none; width: auto; font-size: 0.8rem; visibility: visible; padding-top: 8px; }
+  .rail-left .rail-close { display: none; }
+  /* the news log is a drawer that the News button opens */
+  .rail-right { bottom: calc(52px + var(--safe-b)); }
+  #canvas-wrap { min-height: 120px; flex: 1; }
+  .board-mirror { max-height: 30vh; overflow-y: auto; }
   .tray button { min-height: 44px; }
 }
 

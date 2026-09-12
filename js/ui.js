@@ -239,6 +239,7 @@
     $('event-log').innerHTML = '';   // a new round starts with fresh city news
     $('selection-desc').textContent = '';
     show('game');
+    fitCanvas(); // the wrap only has a size once the game screen is visible
     clockStart();
     updateHUD();
     renderBoardMirror();
@@ -1130,6 +1131,10 @@
     });
 
     root.addEventListener('resize', fitCanvas);
+    // Any change to the canvas box (drawers, chat sidebar, orientation) refits.
+    if (typeof ResizeObserver === 'function' && $('canvas-wrap')) {
+      new ResizeObserver(function () { fitCanvas(); }).observe($('canvas-wrap'));
+    }
   }
 
   function buildCostText(idx) {
@@ -1233,16 +1238,25 @@
       $('set-board-mirror').checked = doc.settings.boardMirror;
       saveDoc(); applyAllSettings();
     });
-    on('btn-album-toggle', function () {
+    function setDrawer(which, open) {
       var g = document.querySelector('.game-screen');
-      g.classList.toggle('rail-left-open');
-      g.classList.remove('rail-right-open');
+      g.classList.toggle('rail-left-open', which === 'left' && open);
+      g.classList.toggle('rail-right-open', which === 'right' && open);
+      var anyOpen = g.classList.contains('rail-left-open') || g.classList.contains('rail-right-open');
+      $('drawer-scrim').hidden = !anyOpen;
+      $('btn-album-toggle').setAttribute('aria-expanded', g.classList.contains('rail-left-open') ? 'true' : 'false');
+      $('btn-news-toggle').setAttribute('aria-expanded', g.classList.contains('rail-right-open') ? 'true' : 'false');
+    }
+    on('btn-album-toggle', function () {
+      setDrawer('left', !document.querySelector('.game-screen').classList.contains('rail-left-open'));
     });
     on('btn-news-toggle', function () {
-      var g = document.querySelector('.game-screen');
-      g.classList.toggle('rail-right-open');
-      g.classList.remove('rail-left-open');
+      setDrawer('right', !document.querySelector('.game-screen').classList.contains('rail-right-open'));
     });
+    // Close controls inside each drawer, plus tap-outside dismissal.
+    on('btn-album-close', function () { setDrawer('left', false); });
+    on('btn-news-close', function () { setDrawer('right', false); });
+    on('drawer-scrim', function () { setDrawer('left', false); });
 
     on('btn-resume', resumeGame);
     on('btn-pause-settings', function () { populateThemes(); openOverlay('overlay-settings'); });

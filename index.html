@@ -79,9 +79,11 @@
       3D view is unavailable in this browser — playing with the accessible board list. Your progress is safe.
     </div>
 
+    <div id="drawer-scrim" class="drawer-scrim" hidden></div>
     <div class="game-grid">
       <!-- left rail: objective + album -->
       <aside class="rail rail-left" aria-labelledby="hud-objective">
+        <button id="btn-album-close" class="rail-close compact-only" aria-label="Close album">✕</button>
         <h2 id="hud-objective">Album</h2>
         <ol id="hud-album"></ol>
         <p id="hud-rival" class="muted" hidden></p>
@@ -119,6 +121,7 @@
 
       <!-- right rail: event log -->
       <aside class="rail rail-right" aria-label="Event log">
+        <button id="btn-news-close" class="rail-close compact-only" aria-label="Close news">✕</button>
         <h2>City news</h2>
         <ol id="event-log" class="scroll-list" aria-live="off"></ol>
       </aside>
