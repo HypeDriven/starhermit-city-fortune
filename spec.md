@@ -269,9 +269,11 @@ Conventions follow https://wiki.starhermit.com/ (manifest at the distribution ro
 | Packaging | `starhermit.txt` with `name`, `launch=index.html`, `owner`, `server=server.js`, `cover=coverart.png`; `LICENSE.md` at the root; `tests/` and `tools/` are dev-only |
 | Server script | `server.js` serves static files (refuses dotfiles) and `/api/v1/time`, `/api/v1/daily`, `/api/v1/score`, `/api/v1/leaderboard` |
 | Platform time | `probeServerTime()` at boot computes `serverOffsetMs` from `/api/v1/time` with round-trip halving; daily date and session ids use it; offline falls back to the client clock |
-| Ranked results | Daily and challenge rounds POST `{entry, replay}`; the server rejects stale versions, unknown or future configs, seed/config mismatches, > 1000 commands, illegal or hash-mismatched replays, unfinished rounds, score/won discrepancies and wins under 3 s; accepted entries are stored once per session+config and ranked with `Store.sortEntries`; the client shows "Verified by server. Rank #r of n" or "Offline — score saved locally" |
-| Leaderboards UI | Local top-20 from `localStorage` across all configs; the server board endpoint exists but is not read by the UI |
-| Identity, presence, friends, invitations, chat, voice, sessions, cloud save, achievement sync, launch activity | Not used. Progress and achievements are local (`cityfortune.save.v1`); the Friends panel shows the current rival and the five most recent local sessions |
+| Ranked results | Daily and challenge rounds POST `{entry, replay}` with `Authorization: Bearer` when a launch token is present; the entry carries the account id (`playerId`) so verified rows can be attributed. The server rejects stale versions, unknown or future configs, seed/config mismatches, > 1000 commands, illegal or hash-mismatched replays, unfinished rounds, score/won discrepancies and wins under 3 s; accepted entries are stored once per session+config and ranked with `Store.sortEntries`; the client shows "Verified by server. Rank #r of n" or "Offline — score saved locally" |
+| Launch token / identity | `js/platform.js` reads `#game_token=<jwt>` from the URL fragment (stripped after the read; query `?token=` kept for local dev), decodes `sub` + `game_scope` (never hard-coded), sends it as `Authorization: Bearer`, and re-mints it every 45 min via `POST /api/v1/games/{slug}/launch-token` (60 s retry). Hosted mode activates iff a token was read |
+| Profile / account line | The title screen shows "Playing as <nickname> — connected to the platform" from `GET /api/v1/users/{sub}/profile` (never usernames, never `/api/v1/me`; `Player <id8>` fallback); offline the line says progress is stored on this device |
+| Leaderboards UI | Local top-20 from `localStorage` across all configs; when hosted with a `leaderboardId`, the platform board (`GET /api/v1/games/{slug}` → `GET /api/v1/leaderboards/{id}/entries`, nicknames resolved, own row marked) renders above it |
+| Presence, friends, invitations, chat, voice, sessions, cloud save, achievement sync, launch activity | Not used. Progress and achievements are local (`cityfortune.save.v1`); the Friends panel shows the current rival and the five most recent local sessions |
 
 ## 13. Technical architecture
 
@@ -312,7 +314,7 @@ QA bar as checkable statements: (1) a new player can reach a die roll in two cli
 
 - English only; no locale switch.
 - "Confirm buys and builds" is persisted but no confirmation step exists; buys and builds apply immediately.
-- The Leaderboards overlay shows only the local board; the server's `/api/v1/leaderboard` is not displayed, and ranked verification depends on `server.js` being the host (the e2e stub returns "rejected", the game reports "Kept locally").
+- Ranked verification depends on `server.js` being the host (the e2e stub returns "rejected", the game reports "Kept locally"); the own-server `/api/v1/leaderboard` is still not displayed — the hosted read uses the platform leaderboard instead.
 - Friends panel is a local summary; there is no platform friend list, presence or invitation.
 - Events `land` and `coin` have clips but no trigger in the UI.
 - The results reason for a win on a clock-only config (turnLimit 0) reads "with 0 turns to spare".
@@ -325,7 +327,7 @@ QA bar as checkable statements: (1) a new player can reach a die roll in two cli
 
 - Ship the nine locales (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) with a string table and a language selector honouring `navigator.languages`, with 30 % expansion room on the tray and setup dialog.
 - Use StarHermit identity, presence and friends for the Friends panel, invitations for shared boards, cloud save for progress, and the platform leaderboard/achievement endpoints instead of local storage and `server-boards.json`.
-- Show the server leaderboard (global and friends filter) in the Leaderboards overlay.
+- Show the own-server verified board and a friends filter in the Leaderboards overlay, and cloud save for progress.
 - Implement the confirm-moves assist as a second press or inline confirm on Buy/Build.
 - Trigger `land` at the end of every token move and `coin` on coin-count changes; add a soft time-warning cue at 10 s remaining.
 - Honour `prefers-reduced-motion` as the default for the Reduced motion setting.

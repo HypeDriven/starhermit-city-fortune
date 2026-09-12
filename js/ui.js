@@ -7,7 +7,7 @@
 
   var Game = root.CFGame, Rules = Game.rules, Content = Game.content,
       Store = Game.store, Audio = root.CFAudio, Render = root.CFRender,
-      RNG = root.CFRNG;
+      RNG = root.CFRNG, Platform = root.CFPlatform;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -791,9 +791,22 @@
 
   // ---------- server (optional; graceful offline) ----------
 
+  // Account + connection status line on the title screen. Offline keeps the
+  // identical local-only behaviour; hosted shows the account nickname.
+  function renderAccountLine() {
+    var el = $('account-line');
+    if (!el || !Platform) return;
+    if (!Platform.hosted) {
+      el.textContent = 'Offline — progress is stored on this device.';
+      return;
+    }
+    var name = Platform.profile ? Platform.profile.name : '…';
+    el.textContent = 'Playing as ' + name + ' — connected to the platform.';
+  }
+
   function probeServerTime() {
     var t0 = nowMs();
-    return fetch('/api/v1/time').then(function (r) {
+    return fetch('/api/v1/time', { headers: Platform.headers() }).then(function (r) {
       if (!r.ok) throw new Error('http ' + r.status);
       return r.json();
     }).then(function (j) {
@@ -805,9 +818,12 @@
   }
 
   function submitScore(entry, replay, cb) {
+    // Attach the account identity when hosted so verified server rows can be
+    // attributed (and resolved to nicknames on the boards).
+    if (Platform.hosted && Platform.userId) entry.playerId = Platform.userId;
     fetch('/api/v1/score', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: Platform.headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ entry: entry, replay: replay })
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.ok) cb('Verified by server. Rank #' + j.rank + ' of ' + j.of + ' on this board.');
@@ -1003,8 +1019,27 @@
     var sorted = Store.sortEntries(boards.entries).slice(0, 20);
     var el = $('boards-list');
     el.innerHTML = '';
+    // Platform leaderboard (read-only): entries resolve to profile nicknames.
+    // Falls back to the local board when no leaderboardId exists or offline.
+    if (Platform.hosted) {
+      Platform.fetchLeaderboard().then(function (entries) {
+        if (!entries || !entries.length) return;
+        var h = document.createElement('h3');
+        h.textContent = 'Platform board';
+        el.appendChild(h);
+        entries.forEach(function (e, i) {
+          var li = document.createElement('li');
+          li.textContent = '#' + (i + 1) + ' ' + e.score + ' pts — ' + e.name;
+          el.appendChild(li);
+        });
+        var note = document.createElement('li');
+        note.className = 'muted';
+        note.textContent = '— local results below —';
+        el.appendChild(note);
+      }).catch(function () {});
+    }
     if (!sorted.length) {
-      el.innerHTML = '<li>No results yet — play a round!</li>';
+      if (!el.children.length) el.innerHTML = '<li>No results yet — play a round!</li>';
       return;
     }
     sorted.forEach(function (e, i) {
@@ -1271,6 +1306,12 @@
       rafId = requestAnimationFrame(frame);
       // refresh daily label once server offset is known
       refreshTitle();
+      // platform identity (token read happens before the deep-link hash check)
+      try {
+        Platform.init();
+        Platform.onUpdate(renderAccountLine);
+        renderAccountLine();
+      } catch (e) { /* offline */ }
       // deep links: #daily, #practice-<id>, #journey-<n>, #challenge-<n>
       var hash = (location.hash || '').slice(1);
       if (hash === 'daily') {
