@@ -6,7 +6,7 @@
   'use strict';
 
   var Game = root.CFGame, Rules = Game.rules, Content = Game.content,
-      Store = Game.store, Audio = root.CFAudio, Render = root.CFRender,
+      Store = Game.store, Audio = root.CFAudio, Render = root.CFRender, GfxUI = root.CFGfxUI,
       RNG = root.CFRNG, Platform = root.CFPlatform;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -899,7 +899,6 @@
     bindCheck('set-haptics', 'haptics');
     bindCheck('set-board-mirror', 'boardMirror');
     bindCheck('set-confirm-moves', 'confirmMoves');
-    bindSelect('set-tier', 'graphicsTier');
     bindSelect('set-theme', 'theme');
     bindSelect('set-palette', 'colorPalette');
     populateThemes();
@@ -944,30 +943,58 @@
       applyAllSettings._capT = setTimeout(function () { el.textContent = ''; }, 2500);
     });
     if (Render.isAvailable()) {
-      var tier = s.graphicsTier === 'auto' ? autoTier() : s.graphicsTier;
-      Render.setQuality(tier);
       Render.setReducedMotion(s.reducedMotion);
       // district stripe colors are baked at build time: rebuild when they change
       var hc = s.colorPalette === 'high-visibility';
       if (hc !== appliedPaletteHC) {
         appliedPaletteHC = hc;
         Render.setPaletteHC(hc);
-        if (sess) {
-          var theme = Content.THEMES.find(function (t) {
-            return t.id === (sess.state.cfg.theme || s.theme);
-          }) || Content.THEMES[0];
-          Render.buildBoard(sess.state.cfg, theme);
-          Render.syncState(sess.state, null, { instant: true });
-          Render.setSelection(selectedTile);
-          updateActionButtons();
-        }
+        rebuildBoard();
       }
     }
   }
 
-  function autoTier() {
-    var mobile = /Mobi|Android/i.test(navigator.userAgent) || (root.innerWidth || 1024) < 720;
-    return mobile ? 'low' : 'high';
+  // ---------- graphics ----------
+
+  // Saved graphics settings: the preset lives in settings.graphicsTier, the
+  // overrides (render scale, adaptive, fps, per-effect tiers) in settings.gfx.
+  function gfxSaved() {
+    var s = doc.settings;
+    return Object.assign({}, s.gfx || {}, { preset: s.graphicsTier || 'auto' });
+  }
+
+  function setGfxSaved(saved) {
+    var o = Object.assign({}, saved);
+    doc.settings.graphicsTier = o.preset || 'auto';
+    delete o.preset;
+    doc.settings.gfx = o;
+    saveDoc();
+    applyGraphics();
+  }
+
+  // Apply live; scene detail/background changes rebuild the board from state.
+  function applyGraphics() {
+    if (!Render.isAvailable()) return;
+    if (Render.setGraphics(gfxSaved())) rebuildBoard();
+  }
+
+  function rebuildBoard() {
+    if (!sess || !Render.isAvailable()) return;
+    var theme = Content.THEMES.find(function (t) {
+      return t.id === (sess.state.cfg.theme || doc.settings.theme);
+    }) || Content.THEMES[0];
+    Render.buildBoard(sess.state.cfg, theme);
+    Render.syncState(sess.state, null, { instant: true });
+    Render.setSelection(selectedTile);
+    updateActionButtons();
+  }
+
+  function bindGraphics() {
+    GfxUI.setup({
+      getSaved: gfxSaved,
+      setSaved: setGfxSaved,
+      info: function () { return Render.isAvailable() ? Render.graphicsInfo() : null; }
+    });
   }
 
   // ---------- help / achievements / boards / friends ----------
@@ -1210,7 +1237,7 @@
     });
     on('btn-title-boards', function () { refreshBoards(); openOverlay('overlay-boards'); });
     on('btn-title-achievements', function () { refreshAchievements(); openOverlay('overlay-achievements'); });
-    on('btn-title-settings', function () { populateThemes(); openOverlay('overlay-settings'); });
+    on('btn-title-settings', function () { populateThemes(); GfxUI.refresh(); openOverlay('overlay-settings'); });
     on('btn-modes-daily', function () {
       openSetup(Content.dailyConfig(Content.utcDateString(serverNowMs())), 'daily');
     });
@@ -1259,7 +1286,7 @@
     on('drawer-scrim', function () { setDrawer('left', false); });
 
     on('btn-resume', resumeGame);
-    on('btn-pause-settings', function () { populateThemes(); openOverlay('overlay-settings'); });
+    on('btn-pause-settings', function () { populateThemes(); GfxUI.refresh(); openOverlay('overlay-settings'); });
     on('btn-pause-help', function () { refreshHelp(); openOverlay('overlay-help'); });
     on('btn-leave', function () {
       if (sess && !sess.state.terminal && sess.state.cfg.kind !== 'tutorial') {
@@ -1302,7 +1329,7 @@
     // WebGL capability
     var glOk = false;
     try {
-      glOk = Render.init($('board-canvas'), { quality: doc.settings.graphicsTier === 'auto' ? autoTier() : doc.settings.graphicsTier });
+      glOk = Render.init($('board-canvas'), { graphics: gfxSaved() });
     } catch (e) { glOk = false; }
     if (!glOk) {
       $('webgl-warning').hidden = false;
@@ -1311,6 +1338,7 @@
 
     bindButtons();
     bindSettings();
+    bindGraphics();
     bindInput();
     applyAllSettings();
     fitCanvas();
@@ -1349,7 +1377,7 @@
       setTimeout(function () {
         try {
           Render.dispose();
-          if (Render.init($('board-canvas'), {})) {
+          if (Render.init($('board-canvas'), { graphics: gfxSaved() })) {
             $('webgl-warning').hidden = true;
             if (wasCfg && sess) {
               var theme = Content.THEMES.find(function (t) { return t.id === wasCfg.theme; }) || Content.THEMES[0];

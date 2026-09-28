@@ -8,6 +8,9 @@
 <title>City Fortune</title>
 <meta name="description" content="Roll around a pop-up paper city, collect properties, and complete timed board albums.">
 <link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }
+</script>
 </head>
 <body data-screen="loading">
 
@@ -194,16 +197,28 @@
       <label><input id="set-muted" type="checkbox"> Mute all</label>
       <label><input id="set-captions" type="checkbox"> Captions for sounds</label>
     </fieldset>
-    <fieldset>
-      <legend>Graphics</legend>
-      <label>Quality tier
-        <select id="set-tier">
-          <option value="auto">Auto</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
-      </label>
+    <fieldset id="gfx-fieldset">
+      <legend id="gfx-legend">Graphics</legend>
+      <div id="gfx-settings" class="gfx-settings">
+        <label><span data-gfx-i18n="quality">Quality</span>
+          <select id="set-tier">
+            <option value="auto">Auto</option>
+            <option value="low">Low</option>
+            <option value="balanced">Balanced</option>
+            <option value="high">High</option>
+            <option value="ultra">Ultra</option>
+          </select>
+        </label>
+        <label><span data-gfx-i18n="renderScale">Render scale</span>
+          <span class="gfx-scale-row"><input id="set-gfx-scale" type="range" min="50" max="200" step="5" value="100">
+          <output id="set-gfx-scale-val" for="set-gfx-scale">100%</output></span>
+        </label>
+        <div id="gfx-categories" class="gfx-categories"></div>
+        <label><input id="set-gfx-adaptive" type="checkbox" checked> <span data-gfx-i18n="adaptive">Adaptive resolution</span></label>
+        <label><input id="set-gfx-fps" type="checkbox"> <span data-gfx-i18n="showFps">Show frame rate</span></label>
+        <p id="gfx-summary" class="muted small gfx-summary" aria-live="polite"></p>
+        <p id="gfx-post-note" class="muted small" hidden data-gfx-i18n="postNote"></p>
+      </div>
       <label>Theme <select id="set-theme"></select></label>
       <label>Color palette
         <select id="set-palette">
@@ -265,7 +280,9 @@
 <script src="js/platform.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
+<script src="js/gfx.js"></script>
 <script src="js/render.js"></script>
+<script src="js/gfx-ui.js"></script>
 <script src="js/ui.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>

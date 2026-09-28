@@ -11,6 +11,7 @@ const Content = require('../js/content.js');
 const Store = require('../js/store.js');
 const Game = require('../js/game.js');
 const Server = require('../server.js');
+const Gfx = require('../js/gfx.js');
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -380,6 +381,56 @@ test('server: daily config lookup exists for today', () => {
   const today = Content.utcDateString(Date.now());
   assert(Server.findConfig('daily-' + today));
   assert.strictEqual(Server.findConfig('daily-2999-01-01'), null, 'future daily must not be published');
+});
+
+// ---------- graphics quality model ----------
+test('gfx: detectPreset from GPU strings', () => {
+  assert.strictEqual(Gfx.detectPreset('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'low');
+  assert.strictEqual(Gfx.detectPreset('llvmpipe (LLVM 15.0.7, 256 bits)'), 'low');
+  assert.strictEqual(Gfx.detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)'), 'high');
+  assert.strictEqual(Gfx.detectPreset('Apple M2'), 'high');
+  assert.strictEqual(Gfx.detectPreset('ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)'), 'balanced');
+  assert.strictEqual(Gfx.detectPreset('Adreno (TM) 640'), 'balanced');
+  assert.strictEqual(Gfx.detectPreset(''), 'balanced');
+  assert.strictEqual(Gfx.detectPreset('Apple M2', { mobile: true }), 'balanced', 'mobile Auto caps at balanced');
+  assert.strictEqual(Gfx.detectPreset('SwiftShader', { mobile: true }), 'low');
+});
+test('gfx: resolve uses detected preset for auto, explicit preset otherwise', () => {
+  const a = Gfx.resolve({}, 'low');
+  assert.strictEqual(a.preset, 'low'); assert.strictEqual(a.auto, true);
+  assert.strictEqual(a.shadows, 'off'); assert.strictEqual(a.post, false, 'low needs no post chain');
+  assert.strictEqual(a.cap, 1);
+  const u = Gfx.resolve({ preset: 'ultra' }, 'low');
+  assert.strictEqual(u.preset, 'ultra'); assert.strictEqual(u.auto, false);
+  assert.strictEqual(u.shadowMap, 4096); assert.strictEqual(u.ao, 'high'); assert.strictEqual(u.post, true);
+  assert.strictEqual(Gfx.resolve({ preset: 'bogus' }, 'high').preset, 'high');
+  assert.strictEqual(Gfx.resolve({}, undefined).preset, 'balanced');
+});
+test('gfx: overrides, scale clamp and flags', () => {
+  const r = Gfx.resolve({ preset: 'high', bloom: 'off', shadows: 'low', detail: 'nope', render_scale: 500, adaptive: false, show_fps: true }, 'low');
+  assert.strictEqual(r.bloom, 'off');
+  assert.strictEqual(r.shadows, 'low'); assert.strictEqual(r.shadowMap, 1024);
+  assert.strictEqual(r.detail, 'detailed', 'invalid override falls back to the preset');
+  assert.strictEqual(r.scale, 2, 'render scale clamps to 200%');
+  assert.strictEqual(Gfx.resolve({ render_scale: 10 }, 'low').scale, 0.5, 'render scale clamps to 50%');
+  assert.strictEqual(r.adaptive, false); assert.strictEqual(r.showFps, true);
+  assert.strictEqual(Gfx.resolve({}, 'low').adaptive, true, 'adaptive defaults on');
+  assert.strictEqual(Gfx.presetTier('balanced', 'antialias'), 'fxaa');
+  for (const p of Gfx.PRESETS) for (const c of Object.keys(Gfx.CATEGORIES)) {
+    assert(Gfx.CATEGORIES[c].includes(Gfx.presetTier(p, c)), p + '.' + c + ' is a valid tier');
+  }
+  assert(/1280×800 px$/.test(Gfx.describe(r, [1280, 800])));
+  assert(/no shadows/.test(Gfx.describe(Gfx.resolve({}, 'low'))));
+});
+test('gfx: choosing a preset clears overrides but keeps scale/adaptive/fps', () => {
+  const s = Gfx.choosePreset({ preset: 'high', bloom: 'off', ao: 'high', render_scale: 150, adaptive: false, show_fps: true }, 'low');
+  assert.deepStrictEqual(s, { preset: 'low', render_scale: 150, adaptive: false, show_fps: true });
+  assert.strictEqual(Gfx.choosePreset({}, 'auto').preset, 'auto');
+});
+test('store: legacy medium tier migrates to balanced', () => {
+  const doc = Store.migrate({ v: 1, settings: { graphicsTier: 'medium' }, progress: {} });
+  assert.strictEqual(doc.settings.graphicsTier, 'balanced');
+  assert.deepStrictEqual(doc.settings.gfx, {});
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

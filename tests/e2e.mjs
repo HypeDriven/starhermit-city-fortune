@@ -130,12 +130,14 @@ async function playRoundToTerminal(page, pass, opts = {}) {
   throw new Error(`round did not terminate after 300 actions (${pass})`);
 }
 
-async function runPass(pass, contextOpts) {
+async function runPass(pass, contextOpts, opts = {}) {
   const context = await browser.newContext(contextOpts);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => { const t = String(e.message || e); if (!browserNoise.test(t)) errors.push(`pageerror: ${t}`); });
-  page.on('console', (m) => { if (m.type() === 'error' && !browserNoise.test(m.text())) errors.push(`console: ${m.text()}`); });
+  page.on('console', (m) => {
+    if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console.${m.type()}: ${m.text()}`);
+  });
   const step = async (name, fn) => { await fn(); console.log(`ok - ${name} (${pass})`); };
 
   try {
@@ -152,6 +154,45 @@ async function runPass(pass, contextOpts) {
       const rm = page.locator('#set-reduced-motion');
       if (!(await rm.isChecked())) await rm.check();
       await page.screenshot({ path: shot('settings', pass) });
+      await page.click('#btn-settings-close');
+      await page.waitForSelector('#overlay-settings', { state: 'hidden' });
+    });
+
+    await step('graphics: presets, override, reload persistence', async () => {
+      const preset = () => page.evaluate(() => [document.body.dataset.gfxPreset, document.getElementById('board-canvas').dataset.gfxPreset]);
+      const summary = () => page.textContent('#gfx-summary');
+      await page.click('#btn-title-settings');
+      await page.waitForSelector('#overlay-settings:not([hidden])');
+      await page.locator('#set-tier').scrollIntoViewIfNeeded();
+      await page.selectOption('#set-tier', 'low');
+      let p = await preset();
+      if (p[0] !== 'low' || p[1] !== 'low') throw new Error(`low preset not applied: ${p}`);
+      if (!/no shadows/.test(await summary())) throw new Error('low summary should say no shadows');
+      await page.selectOption('#set-tier', 'high');
+      p = await preset();
+      if (p[0] !== 'high' || p[1] !== 'high') throw new Error(`high preset not applied: ${p}`);
+      if (!/bloom/.test(await summary())) throw new Error('high summary should list bloom');
+      const opt0 = await page.textContent('#set-gfx-bloom option[value="preset"]');
+      if (!/\(On\)/.test(opt0)) throw new Error(`bloom "From preset" label wrong: ${opt0}`);
+      await page.locator('#set-gfx-bloom').scrollIntoViewIfNeeded();
+      await page.selectOption('#set-gfx-bloom', 'off');
+      if (/bloom/.test(await summary())) throw new Error('bloom override not applied');
+      await page.screenshot({ path: shot('settings-graphics', pass) });
+      await page.click('#btn-settings-close');
+      await page.waitForSelector('#overlay-settings', { state: 'hidden' });
+
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('#screen-title:not([hidden])', { timeout: 15000 });
+      p = await preset();
+      if (p[0] !== 'high' || p[1] !== 'high') throw new Error(`preset lost on reload: ${p}`);
+      await page.click('#btn-title-settings');
+      await page.waitForSelector('#overlay-settings:not([hidden])');
+      if (await page.inputValue('#set-tier') !== 'high') throw new Error('quality select lost on reload');
+      if (await page.inputValue('#set-gfx-bloom') !== 'off') throw new Error('bloom override lost on reload');
+      // choosing a preset clears overrides; Auto keeps the rest of the test on the detected (software → low) tier
+      await page.selectOption('#set-tier', 'auto');
+      if (await page.inputValue('#set-gfx-bloom') !== 'preset') throw new Error('preset change did not clear overrides');
+      if (await page.evaluate(() => document.body.dataset.gfxAuto) !== 'true') throw new Error('auto not applied');
       await page.click('#btn-settings-close');
       await page.waitForSelector('#overlay-settings', { state: 'hidden' });
     });
@@ -195,6 +236,26 @@ async function runPass(pass, contextOpts) {
       await page.waitForSelector('#screen-title:not([hidden])');
       await page.screenshot({ path: shot('back-to-title', pass) });
     });
+
+    if (opts.ultraCheck) await step('ultra preset renders a round without errors', async () => {
+      await page.click('#btn-title-settings');
+      await page.waitForSelector('#overlay-settings:not([hidden])');
+      await page.locator('#set-tier').scrollIntoViewIfNeeded();
+      await page.selectOption('#set-tier', 'ultra');
+      await page.click('#btn-settings-close');
+      await page.click('#btn-play');
+      await page.locator('#journey-list button').first().click();
+      await page.click('#btn-setup-start');
+      await page.waitForSelector('#screen-game:not([hidden])');
+      await waitActionable(page);
+      await page.click('#btn-roll');
+      await waitActionable(page);
+      await page.waitForTimeout(800);
+      const post = await page.evaluate(() => window.CFRender.graphicsInfo());
+      if (post.resolved.preset !== 'ultra') throw new Error('ultra not applied in game');
+      if (post.postFailed) throw new Error('post-processing chain failed at ultra');
+      await page.screenshot({ path: shot('ultra', pass) });
+    });
   } finally {
     const bad = errors.filter(Boolean);
     await context.close();
@@ -210,7 +271,7 @@ try {
     executablePath: '/usr/bin/google-chrome',
     args: ['--no-sandbox', '--enable-unsafe-swiftshader'],
   });
-  await runPass('desktop', { viewport: { width: 1280, height: 800 } });
+  await runPass('desktop', { viewport: { width: 1280, height: 800 } }, { ultraCheck: true });
   await runPass('mobile', { viewport: { width: 390, height: 844 }, hasTouch: true });
   console.log('PASS: city-fortune e2e — desktop and mobile playthroughs completed clean');
 } catch (err) {

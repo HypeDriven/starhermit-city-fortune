@@ -15,7 +15,8 @@
   var DEFAULT_SETTINGS = {
     music: 0.6, effects: 0.9, ambience: 0.5, voice: 0.8,
     muted: false, captions: false,
-    graphicsTier: 'auto',       // auto | low | medium | high
+    graphicsTier: 'auto',       // graphics preset: auto | low | balanced | high | ultra
+    gfx: null,                  // graphics overrides: render_scale, adaptive, show_fps, <category>: tier
     theme: 'paper',
     reducedMotion: false,
     highContrast: false,
@@ -52,12 +53,15 @@
     if (doc.v > SAVE_VERSION) return null; // future format: don't clobber
     doc.v = SAVE_VERSION;
     doc.settings = Object.assign({}, DEFAULT_SETTINGS, doc.settings || {});
+    // pre-preset tiers: medium became balanced
+    if (doc.settings.graphicsTier === 'medium') doc.settings.graphicsTier = 'balanced';
+    if (!doc.settings.gfx || typeof doc.settings.gfx !== 'object') doc.settings.gfx = {};
     doc.progress = Object.assign(defaultProgress(), doc.progress || {});
     return doc;
   }
 
   function fresh() {
-    return { v: SAVE_VERSION, settings: Object.assign({}, DEFAULT_SETTINGS), progress: defaultProgress() };
+    return { v: SAVE_VERSION, settings: Object.assign({}, DEFAULT_SETTINGS, { gfx: {} }), progress: defaultProgress() };
   }
 
   var memoryFallback = null; // used when localStorage is unavailable

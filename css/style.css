@@ -211,6 +211,23 @@ fieldset { border: 1px solid var(--line); border-radius: var(--radius); margin: 
 fieldset label { display: block; margin: 6px 0; }
 fieldset input[type="range"] { width: 100%; max-width: 260px; vertical-align: middle; }
 
+/* Settings → Graphics: two-column rows (label, control) that stack on phones */
+.gfx-settings select { min-height: 36px; max-width: 100%; }
+.gfx-settings > label:first-child select { margin-left: 6px; }
+.gfx-scale-row { display: flex; align-items: center; gap: 8px; max-width: 320px; }
+.gfx-scale-row output { min-width: 3.5em; font-variant-numeric: tabular-nums; }
+.gfx-categories { display: grid; grid-template-columns: 1fr; gap: 2px; margin: 8px 0; max-width: 460px; }
+.gfx-cat { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; margin: 3px 0 !important; }
+.gfx-cat span { flex: 1 1 auto; min-width: 0; }
+.gfx-cat select { flex: 0 0 auto; width: 12.5em; max-width: 58%; }
+.gfx-summary { margin: 6px 0 2px; overflow-wrap: anywhere; font-size: 0.85rem; }
+.fps-meter {
+  position: fixed; top: calc(6px + var(--safe-t)); right: calc(6px + var(--safe-r)); z-index: 60;
+  background: rgba(40, 30, 15, 0.72); color: #fff; font: 600 12px/1.2 ui-monospace, monospace;
+  padding: 3px 7px; border-radius: 6px; pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.fps-meter[hidden] { display: none; }
+
 .help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; text-align: left; }
 .rule-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
 .rule-card h3 { margin: 0 0 4px; font-size: 0.95rem; }

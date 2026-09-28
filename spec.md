@@ -12,14 +12,14 @@ Present tense: this document describes what the shipped game does today. Anythin
 | Players | 1 human; an optional scripted rival ("Penny", "Brick", "Moss", "Vela", "Cobalt") shares the circuit on alternating turns |
 | Session | 3–9 minutes per round (par times 240–560 s); a Learn lesson is under a minute |
 | Platforms | Desktop and mobile browsers (portrait and landscape); WebGL optional |
-| Rendering | Three.js r-module (`vendor/three.module.min.js`) perspective scene of a circular paper board; all UI is semantic HTML beside/over the canvas; a DOM "board list" is the playable fallback without WebGL |
+| Rendering | Three.js r160 (`vendor/three.module.min.js`, addons in `vendor/addons/`) perspective scene of a circular paper board with quality presets and optional post-processing; all UI is semantic HTML beside/over the canvas; a DOM "board list" is the playable fallback without WebGL |
 | Hosting | Static files plus `server.js` (Node 18+, no dependencies) which also verifies ranked scores by replaying them |
 
 **File map**
 
 | Path | Owns |
 |---|---|
-| `index.html` | All screens and overlays as static DOM; loads classic scripts in dependency order, then `js/main.js` as a module |
+| `index.html` | All screens and overlays as static DOM; import map (`three`, `three/addons/`); loads classic scripts in dependency order, then `js/main.js` as a module |
 | `css/style.css` | Palette tokens, responsive shell (wide / compact / portrait / landscape), accessibility modes |
 | `js/rng.js` | mulberry32 PRNG, FNV-1a `hashString`, three derived streams (rules / decor / av) per master seed |
 | `js/rules.js` | Pure deterministic rules engine: creation, legality, resolution, scoring, hashing, serialization, hints |
@@ -27,11 +27,14 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `js/store.js` | Checksummed versioned save document in `localStorage`, local leaderboard, tie-break sort |
 | `js/game.js` | Session wrapper: command log, undo stack, replay envelope and verification, shared board geometry (`tilePos`) |
 | `js/audio.js` | WebAudio buses, per-event synth cues, lazy loading of authored Opus clips from `sfx/manifest.json`, ambience and generative pad |
-| `js/render.js` | Three.js scene: ring of tiles, pop-up buildings, tokens, selection marker, highlights, particles, quality tiers, picking |
+| `js/gfx.js` | Pure graphics quality model (UMD): presets, categories, `detectPreset`, `resolve`, `choosePreset`, `presetTier`, `describe` |
+| `js/render.js` | Three.js scene: ring of tiles, pop-up buildings, tokens, selection marker, highlights, particles, lighting/IBL, post-processing chain, adaptive resolution, picking |
+| `js/gfx-ui.js` | Settings → Graphics controls and their localized strings (nine locales) |
+| `js/post.js` | ES module re-exporting the r160 addons the renderer uses (EffectComposer, passes, FXAA, RoomEnvironment) |
 | `js/ui.js` | Screens, HUD, input, event presentation, lessons, results, settings, achievements, server calls; owns the round clock |
-| `js/main.js` | Module bootstrap: exposes `THREE` on `window`, calls `CFUI.boot()`, shows a readable error if boot throws |
+| `js/main.js` | Module bootstrap: exposes `THREE` on `window`, loads `js/post.js` into `window.CFThreeAddons` (null if it fails), calls `CFUI.boot()`, shows a readable error if boot throws |
 | `server.js` | Static host with `/api/v1/time`, `/daily`, `/score`, `/leaderboard`; replay-verifies submissions into `server-boards.json` |
-| `tests/run-tests.js` | 27 unit/property tests (`npm test`) |
+| `tests/run-tests.js` | 32 unit/property tests (`npm test`) |
 | `tests/e2e.mjs` | Playwright playthrough of the real UI at desktop and mobile viewports (`npm run test:e2e`) |
 | `tools/validate.js` | Offline content validator (structure + bot playability + replay) (`npm run validate`) |
 | `tools/smoke.html` | Dev-only headless smoke driver |
@@ -189,7 +192,7 @@ Deep links: `#daily`, `#practice-<id>`, `#journey-<id or number>`, `#challenge-<
 - **Setup overlay**: name, Rules, Expected duration, Players, Assists, Ranked, Briefing; Start / Cancel.
 - **Game** (wide ≥ 1024 px): left rail Album (+ rival line), centre playfield (canvas, selection line, status row with phase / turn / ⏱ / coins / score, action tray, optional board list), right rail City news (last 30 lines). Compact (< 1024 px): rails become slide-in drawers toggled by Album / News buttons that appear only in the tray. Portrait phone: status row on top, square canvas, tray sticky at the bottom. Landscape phone (≤ 480 px tall): a 150 px static album rail on the left, no news rail, canvas fills the rest. The lesson card is in normal flow above the grid so it can never cover the tray.
 - **Results**: album illustration, headline ("Album complete!" / "Round over"), reason, seven-row breakdown table with total, newly unlocked achievement chips, next-action line, server verification line, then Next (journey wins), Retry, Modes, Title.
-- **Settings**: Audio (4 sliders, mute, captions), Graphics (tier, theme, palette), Accessibility & controls (7 checkboxes). **Help**: goal, tile legend, rival rule, key bindings, and "Right now: legal actions" generated from the live state.
+- **Settings**: Audio (4 sliders, mute, captions), Graphics (quality preset, render scale, nine per-effect selects, adaptive resolution, frame-rate readout, cost summary, theme, palette; see §8 Graphics), Accessibility & controls (7 checkboxes). **Help**: goal, tile legend, rival rule, key bindings, and "Right now: legal actions" generated from the live state.
 
 Safe areas: every fixed/sticky element pads by `env(safe-area-inset-*)`; the WebGL banner and game grid pad the top inset. Nothing critical sits under browser chrome: the tray is the bottom-most element and the Pause button lives in it.
 
@@ -199,13 +202,15 @@ Safe areas: every fixed/sticky element pads by `env(safe-area-inset-*)`; the Web
 
 **Scene palettes (`Content.THEMES`).** Paper Dawn sky `#f2e4c8` / ring `#f6ecd4` / edge `#b89a6a` / light `#ffe0b0` / accent `#e07f3e` / you `#d94f3d` / rival `#4a6fa8`; Canal Dusk sky `#24324a`, accent `#7fb0ff`, you `#ffb066`, rival `#8fd6a0`; Blossom Festival sky `#f6dce4`, accent `#d95f8a`, you `#7a4fb8`; Midnight Metro sky `#161a26`, accent `#ffc46a`, you `#ffd90a`; Harvest Fair sky `#f0d8b0`, accent `#b86a2e`, you `#8a4fb8`. Tile kinds keep fixed colours across themes: bonus `#7fbf6a`, toll `#c05a4a`, card `#6a8fc0`, sticker `#c9a0dc`, park `#8aa86a`; property tiles are the ring colour mixed 35 % toward white with a district stripe: Harbor `#4a7fb8`, Market `#d9934a`, Garden `#5d9c59`, Arts `#8e6fc0`, Tech `#4aa8a8`, Old Town `#b85450` (high-visibility set `#2e6fe4 #b7791f #17a398 #8e24aa #00838f #c62828`). Colour is never the only cue: every district has an icon and label in the album and board list.
 
-**Shape language.** Everything is folded card: tiles are thin boxes (0.30 × 0.055 × 0.42 units), buildings are four-sided paper tents on a card base whose height grows 0.14 per level, tokens are cones with a white paper collar, the Start arch is an accent-coloured tent, and 8–14 seeded decorative tents fill the ring interior. Materials are `MeshStandardMaterial` with roughness 0.9, metalness 0.02, flat shading, under one warm directional key (with 1024² shadow map on medium/high) and a hemisphere fill; ACES tone mapping at 1.05 exposure; fog from 4.5 to 9 units.
+**Shape language.** Everything is folded card: tiles are thin boxes (0.30 × 0.055 × 0.42 units), the Start arch is an accent-coloured tent, and seeded decorations fill the ring interior. With Scene detail *Plain* (the Low preset), buildings are four-sided paper tents on a card base whose height grows 0.14 per level, tokens are cones with a white paper collar, and 8 decorative tents fill the ring. With *Detailed*, owned buildings are pop-up houses (walls tinted toward the owner's colour, a roof in the owner's colour, one row of window cut-outs per level), tiles carry an inset printed card face, 16 decorations mix houses, paper pine trees and tents, the board sits on a craft table that catches its shadow, and tokens are lacquered pawns (cone body, ball head, clear-coat `MeshPhysicalMaterial`). Paper materials are `MeshStandardMaterial` (roughness 0.8–1, metalness 0.02, flat shading; a procedural paper-grain texture at Detailed) under one warm directional key with a hemisphere fill; ACES filmic tone mapping at 1.05 exposure into sRGB output; fog from 4.5 to 9 units.
 
 **Hero.** The board ring with its tokens is the hero; the camera is fixed at (0, 2.35, 2.65) looking at the origin, FOV 48, so the whole ring and the pop-up skyline are always framed.
 
 **Typography.** System UI stack; h1 1.9 rem (1.5 rem under 560 px), rails 0.92 rem, logs 0.85 rem; Larger text raises the root to 1.2 rem. Numbers in the breakdown use tabular figures.
 
-**Motion.** Token hops ease in-out over 0.45 s with up to four sine hops; buildings pop in with a cubic ease over 0.35 s; confetti planes (10 × power × tier factor) fall under gravity for 0.7 s; page/win events add a 0.012/0.02 camera nudge decaying at 0.04/s from an authored base pose (never cumulative). Reduced motion: every CSS transition off, event beats shortened to 60 ms, token moves and pops become instant, no camera shake, particle updates clamped.
+**Motion.** Token hops ease in-out over 0.45 s with up to four sine hops; buildings pop in with a cubic ease over 0.35 s; confetti planes (4 per power at Confetti *Low*, 14 in mixed event/accent/white colours at *High*) fall under gravity for 0.7 s; page/win events add a 0.012/0.02 camera nudge decaying at 0.04/s from an authored base pose (never cumulative). The selection ring pulses gently; with Ambient motion *Animated*, waiting tokens bob by under 1 cm and ~70 paper flecks drift slowly above the table. Reduced motion (the setting or the OS `prefers-reduced-motion`) freezes the ambient pulse, bob and drift; the setting also turns every CSS transition off, shortens event beats to 60 ms, makes token moves and pops instant, removes camera shake and clamps particle updates.
+
+**Graphics.** Lighting is a warm key directional light with PCF soft shadows whose orthographic frustum is fitted to the board disc (±2.1 units, near 1.5, far 6.5), a hemisphere fill, and optional image-based lighting (a PMREM-filtered `RoomEnvironment` as `scene.environment`; paper takes it at 0.15, the lacquered pawns at 1). Window cut-outs are emissive lamps, dim on day themes and glowing on night themes (Canal Dusk, Midnight Metro); the selection ring is HDR-bright when bloom is on. Optional post-processing (three's `EffectComposer`: RenderPass → GTAO → UnrealBloom (strength 0.42, radius 0.35, threshold 1.0, so only lamps, the selection glow and bright highlights bloom) → colour grade (gentle S-curve, +10 % saturation, warm highlights/cool shadows, vignette 0.2) → OutputPass → SMAA or FXAA; MSAA uses a 4-sample target) runs only when an effect needs it, so the Low preset renders directly exactly as cheaply as the original renderer. The Settings panel's **Graphics** section offers Quality (Auto (detected: <tier>), Low, Balanced, High, Ultra), a render scale slider (50–200 %), one select per effect — Shadows (off / low 1024² / medium 2048² / high 4096²), Ambient occlusion (off/on/high), Bloom, Colour grade, Anti-aliasing (off/FXAA/SMAA/MSAA), Reflections (IBL), Confetti (low/high), Scene detail (plain/detailed), Ambient motion (still/animated) — each defaulting to "From preset (<tier>)", Adaptive resolution (on by default) and Show frame rate (a small `#fps-meter` readout), plus a summary line "GPU · cost summary · W×H px". Auto comes from `detectPreset` on the WebGL unmasked renderer string: software renderers (SwiftShader, llvmpipe) get Low, discrete GPUs and Apple M-series High, everything else Balanced, and touch/mobile devices are capped at Balanced. Presets: Low (DPR cap 1, no shadows/post/IBL, plain, still), Balanced (cap 1.5, low shadows, bloom, grade, FXAA, IBL, detailed, animated), High (cap 2, medium shadows, AO, SMAA), Ultra (cap 2, high shadows, high AO, MSAA). The pixel ratio is min(devicePixelRatio, preset cap) × render scale × adaptive scale; adaptive resolution averages 90 frames and steps down 0.1 (to 0.6) above 26 ms or back up 0.05 (to 1) below 14 ms. Choosing a preset clears the per-effect overrides. Every change applies immediately without reload (shadow map size and enable, IBL, post chain rebuild, pixel ratio; Scene detail and Ambient motion rebuild the board from the current state) and persists in the save document (`settings.graphicsTier` = preset, `settings.gfx` = overrides; legacy `medium` migrates to `balanced`). The canvas and `body` carry `data-gfx-preset`. If the addons fail to load or the post chain throws, the game renders without post-processing and the panel shows a note.
 
 **Visual assets the design calls for.** Title key art (paper city diorama), results illustration (open sticker album), subtle paper-grain texture for panels, a cover image in the same diorama style, and the icon/favicon. All are shipped (see §15).
 
@@ -247,7 +252,7 @@ Event priority when several fire in one command: they play in event order with 3
 
 ## 10. Localization
 
-The game ships in **English only**: every string is authored in `index.html` (static labels) and `js/ui.js` (`eventText`, `explainInvalid`, `hintText`, `describeRules`, help cards, results rows) and `js/content.js` (stage names, briefings, card text, achievement names). `<html lang="en">` is fixed; there is no language selector and no locale detection. Layout allowances already in place: buttons and list rows wrap, the tray wraps to multiple rows, panels cap line length at 70 ch under 560 px, and no label depends on a fixed width. Shipping en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT is design intent (see the final section).
+The Settings → Graphics section is localized in en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT (string table in `js/gfx-ui.js`, locale from `navigator.languages`, marked with `lang` on the section). The rest of the game ships in **English only**: every string is authored in `index.html` (static labels) and `js/ui.js` (`eventText`, `explainInvalid`, `hintText`, `describeRules`, help cards, results rows) and `js/content.js` (stage names, briefings, card text, achievement names). `<html lang="en">` is fixed; there is no language selector and no locale detection. Layout allowances already in place: buttons and list rows wrap, the tray wraps to multiple rows, panels cap line length at 70 ch under 560 px, and no label depends on a fixed width. Shipping en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT is design intent (see the final section).
 
 ## 11. Accessibility
 
@@ -256,7 +261,7 @@ The game ships in **English only**: every string is authored in `index.html` (st
 - **No WebGL**: `Render.init` failure shows the banner and forces the board list on; the list is the complete playable surface.
 - **Captions** for meaningful sounds (§9); no audio-only information exists.
 - **Contrast**: ink `#3a2f22` on `#fff8ea` is about 10.7:1; muted `#7a6a52` on panel is about 4.6:1; High contrast mode goes to black/white/amber with `#00c2ff` focus and disables the paper grain; High-visibility palette swaps district stripes and the done-page colour.
-- **Reduced motion**: Settings checkbox (also forces 60 ms event beats); not auto-detected from the OS.
+- **Reduced motion**: Settings checkbox (also forces 60 ms event beats); the OS `prefers-reduced-motion` freezes only the ambient scene animation.
 - **Targets**: all buttons ≥ 44 × 44 CSS px, 8 px gaps; board-list rows 36 px tall (full width).
 - Larger text, Left-handed tray, Haptics off, Always show board list are persisted settings.
 
@@ -281,17 +286,17 @@ Conventions follow https://wiki.starhermit.com/ (manifest at the distribution ro
 - **Determinism**: rules never read the clock; time arrives as `atMs` and is quantised to 100 ms. Cosmetic randomness (particles, camera nudge) uses `Math.random` and never touches state. `hashState` is FNV-1a over a key-sorted JSON of the state minus `events`.
 - **Session/undo/replay**: `Game.createSession` keeps `initialState`, an undo stack of full states, `invalidCount`, and the replay envelope; `applyToSession` validates shape, applies, records command and hash.
 - **Persistence**: `Store.save` writes `{sum, payload}` (FNV-1a checksum) under `cityfortune.save.v1`, with an in-memory fallback when `localStorage` throws; corrupt or future-version documents yield a fresh save; `migrate` merges defaults field by field. Local boards under `cityfortune.leaderboards.v1` (last 200). Server boards in `server-boards.json` (last 2000).
-- **Rendering budget**: quality tiers `low` (DPR 1, no shadows, 40 % particles/decor), `medium` (1.5, shadows), `high` (2, full); `auto` picks low on mobile user agents or widths under 720 px. A round builds 8–17 tile groups, up to 14 decor tents, 1–2 tokens, and one marker; per-round resources are tracked and disposed in `clearBoard`. The frame loop stops rendering entirely while the tab is hidden; the solo clock pauses too. WebGL context loss triggers dispose → re-init → rebuild from the current state.
+- **Rendering budget**: graphics presets as in §8 Graphics; Low matches the original low tier (DPR 1, no shadows, no post-processing, 8 decor tents, 40 % confetti). A round builds 8–17 tile groups, 8–16 decorations, 1–2 tokens, and one marker; per-round resources are tracked and disposed in `clearBoard`. The frame loop stops rendering entirely while the tab is hidden; the solo clock pauses too. WebGL context loss triggers dispose → re-init → rebuild from the current state.
 - **Time limit**: the UI clock (`clock.accumMs`) runs only on the game screen with no overlay open; the frame loop issues a `timeout` command when it passes the limit.
-- **How the e2e test drives the UI**: `tests/e2e.mjs` serves the folder from an embedded `node:http` server on an ephemeral port with stubs for `/api/v1/*`, launches system Chrome through `playwright-core`, and clicks real controls (`#btn-title-settings`, `#set-reduced-motion`, `#btn-play`, first journey button, `#btn-setup-start`, `#btn-roll`/`#btn-buy`/`#btn-skip`, `#btn-pause`, `#btn-resume`, `#btn-hint`, `#btn-results-menu`, `#btn-modes-back`). It reads `window.CFUI._state()` only to decide buy vs. skip and to detect the terminal state.
+- **How the e2e test drives the UI**: `tests/e2e.mjs` serves the folder from an embedded `node:http` server on an ephemeral port with stubs for `/api/v1/*`, launches system Chrome through `playwright-core`, and clicks real controls (`#btn-title-settings`, `#set-reduced-motion`, `#btn-play`, first journey button, `#btn-setup-start`, `#btn-roll`/`#btn-buy`/`#btn-skip`, `#btn-pause`, `#btn-resume`, `#btn-hint`, `#btn-results-menu`, `#btn-modes-back`). It reads `window.CFUI._state()` only to decide buy vs. skip and to detect the terminal state. The Graphics step picks Low then High in `#set-tier`, checks `data-gfx-preset` on `body` and `#board-canvas` and the `#gfx-summary` text, overrides `#set-gfx-bloom` to Off, reloads and confirms both persisted, then chooses Auto (which clears the override); the desktop pass finally plays a roll at Ultra and checks the post chain built.
 
 ## 14. Testing and acceptance criteria
 
-`npm test` (`tests/run-tests.js`, 27 tests) verifies: RNG stream determinism and hashing; initial state; roll/move/resolve; every invalid reason; the buy flow; build cost, level and max-level; rival alternation and rent; rival never owns protected tiles; score breakdown sums; album win; turn-limit loss; timeout only when due; serialize round-trip; identical hashes for identical seed+commands and `verifyReplay`; tampered hash detection; undo (and `undo-disabled`); hints always legal; 300 fuzzed malformed commands never mutate state; content counts (40/6/3/5 themes/10 achievements, unique keys); every config structurally legal and terminating under a bot within 600 commands; daily determinism; lesson forced setups; store checksum/migration; tie-break order; server accepts an honest replay and rejects a lying score and a stale version; daily lookup rejects future dates.
+`npm test` (`tests/run-tests.js`, 32 tests) verifies: RNG stream determinism and hashing; initial state; roll/move/resolve; every invalid reason; the buy flow; build cost, level and max-level; rival alternation and rent; rival never owns protected tiles; score breakdown sums; album win; turn-limit loss; timeout only when due; serialize round-trip; identical hashes for identical seed+commands and `verifyReplay`; tampered hash detection; undo (and `undo-disabled`); hints always legal; 300 fuzzed malformed commands never mutate state; content counts (40/6/3/5 themes/10 achievements, unique keys); every config structurally legal and terminating under a bot within 600 commands; daily determinism; lesson forced setups; store checksum/migration; tie-break order; server accepts an honest replay and rejects a lying score and a stale version; daily lookup rejects future dates; `gfx.js` GPU detection (software → low, discrete → high, mobile cap), preset/override resolution, render-scale clamping, presets clearing overrides, and the legacy tier migration.
 
 `npm run validate` additionally plays every journey, challenge, practice and the last two dailies three times with a competent bot and requires termination, finite scores, valid levels, replay verification, and at least one win per non-challenge config.
 
-`npm run test:e2e` passes when both the 1280×800 desktop pass and the 390×844 touch pass complete title → settings → modes → setup → full round → results → modes → title with zero console errors or page errors (GPU driver noise filtered).
+`npm run test:e2e` passes when both the 1280×800 desktop pass and the 390×844 touch pass complete title → settings → graphics (presets, override, reload persistence) → modes → setup → full round → results → modes → title (desktop adds a round at Ultra) with zero console errors, warnings or page errors (GPU driver noise filtered).
 
 QA bar as checkable statements: (1) a new player can reach a die roll in two clicks from the title and the setup dialog states the rules; (2) every implemented feature (all modes, undo, hint, pause, settings, help, achievements, boards, friends, board list, deep links) is reachable through visible controls; (3) no console errors or warnings during a full round at desktop and mobile sizes; (4) no text or control is cut off in the title, modes, game, results, and every overlay at 1280×800, 390×844 portrait and 844×390 landscape; (5) the game remains playable with WebGL disabled through the board list.
 
@@ -307,18 +312,19 @@ QA bar as checkable statements: (1) a new player can reach a die roll in two cli
 | `sfx/*.opus` (16 clips: dice-rattle, pawn-hop, piece-land, coin-clink, salary-register, buy-stamp, build-hammer, rent-collect, rent-pay, card-flip, sticker-press, page-turn, win-fanfare, lose-trombone, ui-click, invalid-thud) | Event cues (§9) | MOSS-SoundEffect v2.0, 100 steps | shipped |
 | `sfx/*.opus` (9 clips: tile-tap, paper-flick, card-slide, toll-clink, bonus-coins, rival-tap, paper-rewind, hint-bell, star-chime) | Cues for select, deselect, skip, toll, bonus, rival, undo, hint, star | MOSS-SoundEffect v2.0, 100 steps | generated in this pass, wired through `manifest.json` |
 | `sfx/manifest.txt` / `manifest.json` / `manifest.md` | Canonical table / loader+generator input / generator output | Hand-written / tool | shipped |
-| `vendor/three.module.min.js` | Renderer | Three.js (MIT) | shipped |
+| `vendor/three.module.min.js` | Renderer | Three.js r160 (0.160.1, MIT) | shipped |
+| `vendor/addons/` | Post-processing passes and shaders, `RoomEnvironment`, `SimplexNoise` | Three.js 0.160.1 `examples/jsm` (MIT), same revision as the core | shipped |
 | 3D models, character animation | — | — | none required: all geometry is procedural card stock; there is no humanoid |
 
 ## 16. Known limitations
 
-- English only; no locale switch.
+- English only apart from the Graphics settings section; no locale switch.
 - "Confirm buys and builds" is persisted but no confirmation step exists; buys and builds apply immediately.
 - Ranked verification depends on `server.js` being the host (the e2e stub returns "rejected", the game reports "Kept locally"); the own-server `/api/v1/leaderboard` is still not displayed — the hosted read uses the platform leaderboard instead.
 - Friends panel is a local summary; there is no platform friend list, presence or invitation.
 - Events `land` and `coin` have clips but no trigger in the UI.
 - The results reason for a win on a clock-only config (turnLimit 0) reads "with 0 turns to spare".
-- Reduced motion is a manual setting; `prefers-reduced-motion` is not read.
+- The Reduced motion setting is manual; `prefers-reduced-motion` only freezes the ambient scene animation (pulse, bob, drifting flecks).
 - Undo reverses a whole command including the rival's reply, so it cannot revisit a single deed decision after the rival has moved.
 - Journey best scores and stars are stored locally only; clearing site data resets progress.
 - Tutorial lessons keep the board playable after the goal, so a lesson round can run until the 40-turn limit if the player keeps rolling.
@@ -330,5 +336,5 @@ QA bar as checkable statements: (1) a new player can reach a die roll in two cli
 - Show the own-server verified board and a friends filter in the Leaderboards overlay, and cloud save for progress.
 - Implement the confirm-moves assist as a second press or inline confirm on Buy/Build.
 - Trigger `land` at the end of every token move and `coin` on coin-count changes; add a soft time-warning cue at 10 s remaining.
-- Honour `prefers-reduced-motion` as the default for the Reduced motion setting.
+- Honour `prefers-reduced-motion` as the default for the Reduced motion setting (today it only freezes ambient scene animation).
 - Extend the e2e playthrough to a Learn lesson, the daily, and a landscape phone viewport.

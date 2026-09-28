@@ -1,8 +1,9 @@
-/* City Fortune — module bootstrap: provides THREE, then boots the UI.
- * Classic scripts (rng/rules/content/store/audio/game/render/ui) have already
- * run and registered their globals by the time this deferred module executes.
+/* City Fortune — module bootstrap: provides THREE (and its post-processing
+ * addons), then boots the UI. Classic scripts (rng/rules/content/store/audio/
+ * game/gfx/render/ui) have already run and registered their globals by the
+ * time this deferred module executes.
  */
-import * as THREE from '../vendor/three.module.min.js';
+import * as THREE from 'three';
 
 window.THREE = THREE;
 
@@ -20,5 +21,12 @@ function boot() {
   }
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-else boot();
+// Addons are an enhancement: if they fail to load, the renderer draws
+// without post-processing and the Graphics panel says so.
+import('./post.js')
+  .then(function (addons) { window.CFThreeAddons = addons; })
+  .catch(function () { window.CFThreeAddons = null; })
+  .then(function () {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  });
