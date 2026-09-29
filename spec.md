@@ -338,3 +338,7 @@ QA bar as checkable statements: (1) a new player can reach a die roll in two cli
 - Trigger `land` at the end of every token move and `coin` on coin-count changes; add a soft time-warning cue at 10 s remaining.
 - Honour `prefers-reduced-motion` as the default for the Reduced motion setting (today it only freezes ambient scene animation).
 - Extend the e2e playthrough to a Learn lesson, the daily, and a landscape phone viewport.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
