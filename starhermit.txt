@@ -1,4 +1,5 @@
 name=City Fortune
+description=Roll around a miniature city, buy districts, build houses, and collect rent while completing board objectives.
 launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=server.js
