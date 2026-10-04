@@ -315,3 +315,11 @@ body.left-handed .tray { flex-direction: row-reverse; }
   h1 { font-size: 1.5rem; }
   p, li, dd { max-width: 70ch; }
 }
+
+/* StarHermit: title buttons stay hidden until they apply; confirmation toast */
+#screen-title nav button[hidden] { display: none; }
+.cf-toast {
+  position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  z-index: 1000; max-width: min(92vw, 32em); padding: 10px 16px; border-radius: 10px; text-align: center;
+  background: #fffaf0; color: #2b2622; border: 1px solid rgba(43, 38, 34, 0.25); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}

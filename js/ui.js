@@ -55,7 +55,25 @@
     if (doc.settings.haptics && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
   }
 
-  function saveDoc() { Store.save(doc); }
+  // Every save mirrors to the StarHermit cloud slot and settings KV when signed in.
+  function saveDoc() {
+    var wrapped = Store.save(doc);
+    if (Platform.hosted) {
+      Platform.saveCloud(wrapped);
+      Platform.mirrorSettings(doc.settings);
+    }
+  }
+
+  var PT = root.PlatformStrings.platformStrings(navigator.language); // StarHermit UI strings
+  function toast(text) {
+    var host = document.body;
+    var t = document.createElement('div');
+    t.className = 'cf-toast';
+    t.setAttribute('role', 'status');
+    t.textContent = text;
+    host.appendChild(t);
+    setTimeout(function () { t.remove(); }, 3500);
+  }
 
   // ---------- screens ----------
   var SCREENS = ['loading', 'title', 'modes', 'setup', 'game', 'results'];
@@ -797,6 +815,9 @@
   function renderAccountLine() {
     var el = $('account-line');
     if (!el || !Platform) return;
+    var inv = $('btn-title-invite'), sib = $('btn-title-signin');
+    if (inv) { inv.textContent = PT.invite; inv.hidden = !Platform.hosted; }
+    if (sib) { sib.textContent = PT.signIn; sib.hidden = !Platform.canSignIn(); }
     if (!Platform.hosted) {
       el.textContent = 'Offline — progress is stored on this device.';
       return;
@@ -806,6 +827,9 @@
   }
 
   function probeServerTime() {
+    // The own-server clock route is only asked when signed in; standalone
+    // makes no requests and uses the local clock.
+    if (!Platform.hosted) { serverOffsetMs = 0; return Promise.resolve(); }
     var t0 = nowMs();
     return fetch('/api/v1/time', { headers: Platform.headers() }).then(function (r) {
       if (!r.ok) throw new Error('http ' + r.status);
@@ -821,7 +845,8 @@
   function submitScore(entry, replay, cb) {
     // Attach the account identity when hosted so verified server rows can be
     // attributed (and resolved to nicknames on the boards).
-    if (Platform.hosted && Platform.userId) entry.playerId = Platform.userId;
+    if (!Platform.hosted) { cb('Offline — score saved locally.'); return; }
+    if (Platform.userId) entry.playerId = Platform.userId;
     fetch('/api/v1/score', {
       method: 'POST',
       headers: Platform.headers({ 'Content-Type': 'application/json' }),
@@ -1001,16 +1026,17 @@
 
   function refreshHelp() {
     var el = $('help-content');
+    var k = Platform.keyLabel;
     var bindings = [
-      ['Enter / Space', 'Confirm: roll the die, or buy when a deed is offered'],
-      ['Arrow keys', 'Move the selection around the board'],
-      ['B', 'Buy the offered property'],
-      ['N', 'Skip the offered property'],
-      ['U', 'Undo (where allowed)'],
-      ['H', 'Hint'],
-      ['Esc', 'Pause / close panel'],
-      ['M', 'Mute / unmute'],
-      ['C', 'Skip animations (settle the board)']
+      [k('confirm'), 'Confirm: roll the die, or buy when a deed is offered'],
+      [k('prev') + ' · ' + k('next'), 'Move the selection around the board'],
+      [k('buy'), 'Buy the offered property'],
+      [k('skip'), 'Skip the offered property'],
+      [k('undo'), 'Undo (where allowed)'],
+      [k('hint'), 'Hint'],
+      [k('cancel') + ' · ' + k('pause'), 'Pause / close panel'],
+      [k('mute'), 'Mute / unmute'],
+      [k('settle'), 'Skip animations (settle the board)']
     ];
     var cards = bindings.map(function (b) {
       return '<section class="rule-card"><h3>' + esc(b[0]) + '</h3><p>' + esc(b[1]) + '</p></section>';
@@ -1174,14 +1200,15 @@
   function onKey(e) {
     if (e.defaultPrevented) return;
     var inField = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName || '');
-    if (e.key === 'Escape') {
+    var act = Platform.actionFor(e); // StarHermit control bindings
+    if (e.key === 'Escape' || act === 'cancel') {
       if (anyOverlayOpen()) { closeTopOverlay(); maybeResumeClock(); }
       else if (currentScreen === 'game') pauseGame();
       e.preventDefault();
       return;
     }
     if (inField) return;
-    if (e.key === 'm' || e.key === 'M') {
+    if (act === 'mute') {
       doc.settings.muted = !doc.settings.muted;
       $('set-muted').checked = doc.settings.muted;
       Audio.applySettings(doc.settings); saveDoc();
@@ -1189,19 +1216,19 @@
       return;
     }
     if (currentScreen !== 'game' || !sess || anyOverlayOpen()) return;
-    switch (e.key) {
-      case 'ArrowLeft': case 'ArrowUp': cycleFocus(-1); e.preventDefault(); break;
-      case 'ArrowRight': case 'ArrowDown': cycleFocus(1); e.preventDefault(); break;
-      case 'Enter': case ' ':
+    switch (act) {
+      case 'prev': cycleFocus(-1); e.preventDefault(); break;
+      case 'next': cycleFocus(1); e.preventDefault(); break;
+      case 'confirm':
         e.preventDefault();
         primaryAction();
         break;
-      case 'b': case 'B': if (!$('btn-buy').disabled) dispatch({ type: 'buy' }); break;
-      case 'n': case 'N': if (!$('btn-skip').disabled) dispatch({ type: 'skip' }); break;
-      case 'u': case 'U': doUndo(); break;
-      case 'h': case 'H': doHint(); break;
-      case 'c': case 'C': skipPresentation(); break;
-      case 'p': case 'P': pauseGame(); break;
+      case 'buy': if (!$('btn-buy').disabled) dispatch({ type: 'buy' }); break;
+      case 'skip': if (!$('btn-skip').disabled) dispatch({ type: 'skip' }); break;
+      case 'undo': doUndo(); break;
+      case 'hint': doHint(); break;
+      case 'settle': skipPresentation(); break;
+      case 'pause': pauseGame(); break;
     }
   }
 
@@ -1236,6 +1263,13 @@
       openSetup(Content.dailyConfig(d), 'daily');
     });
     on('btn-title-boards', function () { refreshBoards(); openOverlay('overlay-boards'); });
+    on('btn-title-signin', function () { Platform.signIn(); });
+    on('btn-title-invite', function () {
+      Platform.copyInvite().then(function (ok) {
+        var msg = ok ? PT.inviteCopied : PT.inviteFailed;
+        toast(msg); announce(msg);
+      });
+    });
     on('btn-title-achievements', function () { refreshAchievements(); openOverlay('overlay-achievements'); });
     on('btn-title-settings', function () { populateThemes(); GfxUI.refresh(); openOverlay('overlay-settings'); });
     on('btn-modes-daily', function () {
@@ -1314,7 +1348,26 @@
     else leaveRound();
   }
 
+  // Signed in: the cloud slot (remote wins, checksum-verified) and then the
+  // settings KV (platform value wins) land before anything reads the save.
+  function restoreFromPlatform() {
+    return Promise.all([Platform.loadCloud(), Platform.getSettings()]).then(function (r) {
+      var remote = Store.loadRaw(r[0]);
+      var d = remote || Store.load();
+      var kv = r[1] || {};
+      Object.keys(kv).forEach(function (key) { d.settings[key] = kv[key]; });
+      if (remote || Object.keys(kv).length) Store.save(d);
+    }).catch(function () { /* local save stays authoritative */ });
+  }
+
   function boot() {
+    // platform identity (the SDK already read the token in index.html)
+    try { Platform.init(); } catch (e) { /* offline */ }
+    if (!Platform.hosted) { bootGame(); return; }
+    Promise.race([restoreFromPlatform(), new Promise(function (r) { setTimeout(r, 3000); })]).then(bootGame, bootGame);
+  }
+
+  function bootGame() {
     doc = Store.load();
 
     // audio starts on first gesture (autoplay policy)
@@ -1348,11 +1401,15 @@
       rafId = requestAnimationFrame(frame);
       // refresh daily label once server offset is known
       refreshTitle();
-      // platform identity (token read happens before the deep-link hash check)
       try {
-        Platform.init();
-        Platform.onUpdate(renderAccountLine);
+        var wasHosted = Platform.hosted;
+        Platform.onUpdate(function () {
+          if (wasHosted && !Platform.hosted) toast(PT.signedOut); // renewal refused
+          wasHosted = Platform.hosted;
+          renderAccountLine();
+        });
         renderAccountLine();
+        Platform.loadBindings().then(function () { if (!$('overlay-help').hidden) refreshHelp(); });
       } catch (e) { /* offline */ }
       // deep links: #daily, #practice-<id>, #journey-<n>, #challenge-<n>
       var hash = (location.hash || '').slice(1);

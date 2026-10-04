@@ -66,17 +66,22 @@
 
   var memoryFallback = null; // used when localStorage is unavailable
 
+  // Parses a wrapped {sum, payload} string into a migrated doc; null when it
+  // is missing, corrupt or from a newer version (local cache and cloud slot).
+  function loadRaw(raw) {
+    if (raw == null) return null;
+    try {
+      var doc = JSON.parse(raw);
+      if (!doc || doc.sum !== checksum(doc.payload)) return null; // corrupt
+      return migrate(JSON.parse(doc.payload));
+    } catch (e) { return null; }
+  }
+
   function load() {
     var raw = null;
     try { raw = localStorage.getItem(KEY); } catch (e) { /* private mode */ }
     if (raw == null && memoryFallback) raw = memoryFallback;
-    if (raw == null) return fresh();
-    try {
-      var doc = JSON.parse(raw);
-      if (!doc || doc.sum !== checksum(doc.payload)) return fresh(); // corrupt → clean slate
-      var migrated = migrate(JSON.parse(doc.payload));
-      return migrated || fresh();
-    } catch (e) { return fresh(); }
+    return loadRaw(raw) || fresh();
   }
 
   function save(doc) {
@@ -85,6 +90,7 @@
     var wrapped = JSON.stringify({ sum: checksum(payload), payload: payload });
     memoryFallback = wrapped;
     try { localStorage.setItem(KEY, wrapped); } catch (e) { /* memory fallback keeps session */ }
+    return wrapped;
   }
 
   // ---------- leaderboards (local; host adapter may sync) ----------
@@ -113,7 +119,7 @@
   return {
     SAVE_VERSION: SAVE_VERSION,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
-    load: load, save: save, fresh: fresh, migrate: migrate,
+    load: load, loadRaw: loadRaw, save: save, fresh: fresh, migrate: migrate,
     checksum: checksum,
     loadBoards: loadBoards, saveBoards: saveBoards, sortEntries: sortEntries
   };

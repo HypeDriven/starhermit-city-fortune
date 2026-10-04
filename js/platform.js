@@ -1,58 +1,52 @@
-/* City Fortune — StarHermit platform adapter (browser global: window.CFPlatform).
- * Launch-token lifecycle (fragment read + strip, Bearer, 45-min refresh),
- * profile nickname resolution, and the read-only platform leaderboard.
- * The game's own-server validated score submit/board/time routes are its
- * backend (declared server=server.js) and are called from ui.js with these
- * headers. Everything degrades to offline local play: no token → no hosted
- * calls at all. Tokens are kept in memory only — never persisted.
+/* City Fortune — StarHermit platform adapter (browser global: window.CFPlatform)
+ * over window.StarHermit (starhermit-sdk.js, loaded and init()ed from
+ * index.html before the game scripts). The SDK reads the launch token
+ * (#game_token / #access_token), strips it, renews it and owns profile,
+ * cloud save (slot game:<slug>), settings KV, control bindings, the
+ * read-only platform leaderboard, invite link and sign-in. The game's
+ * own-server validated score/board/time routes (server.js) are called from
+ * ui.js with these headers, only when signed in. Standalone (no token)
+ * nothing here touches the network.
  */
 (function (root, factory) {
-  var api = factory();
+  var api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.CFPlatform = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
 
-  var REFRESH_MS = 45 * 60 * 1000; // token lives 60 min; re-mint at 45
-  var RETRY_MS = 60 * 1000;
+  var SAVE_DEBOUNCE_MS = 2000;
+  function sdk() { return (typeof globalThis !== 'undefined' ? globalThis : root).StarHermit || null; }
+  function signedIn() { var s = sdk(); return !!(s && s.signedIn); }
 
-  var token = null, userId = null, slug = null;
-  var hosted = false;
+  // Keyboard actions — declared as control.<action> in starhermit.txt.
+  var DEFAULT_BINDINGS = {
+    prev: ['ArrowLeft', 'ArrowUp'], next: ['ArrowRight', 'ArrowDown'], confirm: ['Enter', 'Space'],
+    buy: ['KeyB'], skip: ['KeyN'], undo: ['KeyU'], hint: ['KeyH'], settle: ['KeyC'],
+    pause: ['KeyP'], cancel: ['Escape'], mute: ['KeyM']
+  };
+  // Synthetic events (no `code`) map by key.
+  var KEY_FALLBACK = {
+    ArrowLeft: 'prev', ArrowUp: 'prev', ArrowRight: 'next', ArrowDown: 'next', Enter: 'confirm', ' ': 'confirm',
+    b: 'buy', n: 'skip', u: 'undo', h: 'hint', c: 'settle', p: 'pause', Escape: 'cancel', m: 'mute'
+  };
+  // Preferences mirrored to the settings KV.
+  var SYNCED_SETTINGS = ['music', 'effects', 'ambience', 'voice', 'muted', 'captions', 'graphicsTier', 'gfx', 'theme',
+    'reducedMotion', 'highContrast', 'colorPalette', 'largeText', 'leftHanded', 'haptics', 'boardMirror', 'confirmMoves'];
+  var KEY_NAMES = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', Space: 'Space', Enter: 'Enter' };
+
+  function clone(b) {
+    var o = {};
+    Object.keys(b).forEach(function (k) { o[k] = b[k].slice(); });
+    return o;
+  }
+
   var profile = null;          // { name } for the signed-in player
-  var profileNames = {};       // userId -> Promise<string>
-  var refreshTimer = null, retryTimer = null;
   var listeners = [];
-
-  function decodeJwt(t) {
-    try {
-      var seg = String(t).split('.')[1];
-      if (!seg) return null;
-      var b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
-      b64 += '='.repeat((4 - (b64.length % 4)) % 4);
-      var bin = atob(b64);
-      var bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return JSON.parse(new TextDecoder().decode(bytes));
-    } catch (e) { return null; }
-  }
-
-  // Fragment first (platform contract); query forms are local-dev only.
-  function readLaunchToken() {
-    try {
-      var h = new URLSearchParams(String(root.location.hash || '').replace(/^#/, ''));
-      var t = h.get('game_token');
-      if (t) {
-        h.delete('game_token');
-        h.delete('session_id');
-        var rest = h.toString();
-        root.history.replaceState(null, '',
-          root.location.pathname + root.location.search + (rest ? '#' + rest : ''));
-        return t;
-      }
-      var q = new URLSearchParams(root.location.search);
-      return q.get('game_token') || q.get('token') || q.get('launch_token') || null;
-    } catch (e) { return null; }
-  }
+  var hooked = false;
+  var bindings = clone(DEFAULT_BINDINGS);
+  var codeMap = null;
+  var kvReady = false, kvLast = null, kvTimer = null;
 
   function notify() {
     for (var i = 0; i < listeners.length; i++) {
@@ -60,118 +54,145 @@
     }
   }
 
-  function api() {
-    token = readLaunchToken();
-    if (token) {
-      var claims = decodeJwt(token);
-      if (!claims) token = null;
-      else {
-        if (typeof claims.sub === 'string' && claims.sub) userId = claims.sub;
-        if (typeof claims.game_scope === 'string' && claims.game_scope) slug = claims.game_scope;
-        if (!userId || !slug) token = null; // not a usable launch token
-      }
-    }
-    hosted = !!token;
-    if (hosted) {
-      if (refreshTimer) clearInterval(refreshTimer);
-      refreshTimer = setInterval(refreshToken, REFRESH_MS);
-      fetchProfile().then(notify).catch(function () {});
-    }
-    return hosted;
-  }
-
-  // Scoped tokens may re-mint via the game's launch-token route; retry a
-  // failed re-mint after ~60 s.
-  function refreshToken() {
-    if (!token || !slug) return Promise.resolve(false);
-    return fetch('/api/v1/games/' + encodeURIComponent(slug) + '/launch-token', {
-      method: 'POST', headers: headers({ 'Content-Type': 'application/json' }), body: '{}'
-    }).then(function (r) { return r.json().catch(function () { return null; }); }).then(function (j) {
-      if (j && typeof j.token === 'string' && j.token) {
-        token = j.token;
-        var claims = decodeJwt(token);
-        if (claims && claims.sub) userId = claims.sub;
-        if (claims && claims.game_scope) slug = claims.game_scope;
+  function init() {
+    var s = sdk();
+    if (s && !hooked) {
+      hooked = true;
+      s.on('auth', function (a) {
+        if (!a.signedIn) profile = null;
         notify();
-        return true;
-      }
-      retryRefresh();
-      return false;
-    }).catch(function () { retryRefresh(); return false; });
-  }
-  function retryRefresh() {
-    if (retryTimer || !token) return;
-    retryTimer = setTimeout(function () { retryTimer = null; refreshToken(); }, RETRY_MS);
+      });
+    }
+    if (signedIn()) {
+      fetchProfile().then(notify).catch(function () {});
+      try {
+        root.addEventListener('pagehide', function () { flushSave(); });
+        root.document.addEventListener('visibilitychange', function () { if (root.document.hidden) flushSave(); });
+      } catch (e) { /* no window events */ }
+    }
+    return signedIn();
   }
 
   function headers(extra) {
     var h = extra || {};
-    if (token) h.Authorization = 'Bearer ' + token;
+    var s = sdk();
+    if (s && s.token) h.Authorization = 'Bearer ' + s.token;
     return h;
   }
 
-  // Nickname via GET /api/v1/users/{id}/profile — the only profile read a
-  // game-scoped token may make. Never /api/v1/me, never usernames.
+  // Nickname (never /api/v1/me, never usernames), 'Player <id>' fallback.
   function profileFor(pid) {
     if (!pid || typeof pid !== 'string') return Promise.resolve('player');
-    if (profileNames[pid]) return profileNames[pid];
-    var p = fetch('/api/v1/users/' + encodeURIComponent(pid) + '/profile', { headers: headers() })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        var n = j && typeof j.nickname === 'string' && j.nickname ? j.nickname : null;
-        return n || ('Player ' + pid.slice(0, 8));
-      })
-      .catch(function () { return 'Player ' + pid.slice(0, 8); });
-    profileNames[pid] = p;
-    return p;
+    var s = sdk();
+    if (!s || !s.signedIn) return Promise.resolve('Player ' + pid.slice(0, 6));
+    return s.profile(pid).then(function (p) { return (p && p.displayName) || 'Player ' + pid.slice(0, 6); },
+      function () { return 'Player ' + pid.slice(0, 6); });
   }
   function fetchProfile() {
-    if (!userId) return Promise.resolve(null);
-    return profileFor(userId).then(function (n) {
+    var s = sdk();
+    if (!s || !s.userId) return Promise.resolve(null);
+    return profileFor(s.userId).then(function (n) {
       profile = { name: n.slice(0, 40) };
       return profile;
     });
   }
 
-  /* Platform leaderboard (read-only; clients never submit): the game record
-   * yields leaderboardId, entries resolve to nicknames. null when absent. */
+  /* Platform leaderboard (read-only; clients never submit): the game's first
+   * board, entries resolved to nicknames. null when absent or signed out. */
   function fetchLeaderboard() {
-    if (!hosted || !slug) return Promise.resolve(null);
-    return fetch('/api/v1/games/' + encodeURIComponent(slug), { headers: headers() })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (g) {
-        if (!g || !g.leaderboardId) return null;
-        return fetch('/api/v1/leaderboards/' + encodeURIComponent(g.leaderboardId) +
-          '/entries?page=1&pageSize=20', { headers: headers() });
-      })
-      .then(function (r) { return r ? (r.ok ? r.json() : null) : null; })
-      .then(function (j) {
-        if (!j) return null;
-        var raw = (j.entries || j.items) || [];
-        return Promise.all(raw.slice(0, 20).map(function (e) {
-          var uid = e.userId != null ? e.userId : e.playerId;
-          return profileFor(String(uid || '')).then(function (name) {
-            return {
-              name: String(uid || '') === userId ? 'You (' + name + ')' : name,
-              score: e.score != null ? e.score : e.value,
-            };
-          });
-        }));
-      })
-      .catch(function () { return null; });
+    if (!signedIn()) return Promise.resolve(null);
+    var me = sdk().userId;
+    return sdk().leaderboard(null, { pageSize: 20 }).then(function (res) {
+      if (!res || !res.board) return null;
+      return Promise.all((res.items || []).slice(0, 20).map(function (e) {
+        var uid = String(e.userId != null ? e.userId : (e.playerId || ''));
+        return profileFor(uid).then(function (name) {
+          return { name: uid === me ? 'You (' + name + ')' : name, score: e.score != null ? e.score : e.value };
+        });
+      }));
+    }).catch(function () { return null; });
+  }
+
+  /* Cloud save: the wrapped {sum, payload} save string in game:<slug>. */
+  function loadCloud() { return signedIn() ? sdk().loadSave().catch(function () { return null; }) : Promise.resolve(null); }
+  function saveCloud(wrapped) {
+    if (!signedIn()) return;
+    try { sdk().saveJSON(JSON.parse(wrapped), SAVE_DEBOUNCE_MS); } catch (e) { /* malformed: skip */ }
+  }
+  function flushSave() { return signedIn() ? sdk().flushSave(true) : Promise.resolve(false); }
+
+  /* Settings KV: preferences only; patched after the KV was read once. */
+  function pick(settings) {
+    var out = {};
+    SYNCED_SETTINGS.forEach(function (k) { if (settings && settings[k] !== undefined && settings[k] !== null) out[k] = settings[k]; });
+    return out;
+  }
+  function getSettings() {
+    if (!signedIn()) return Promise.resolve({});
+    return sdk().getSettings().then(function (kv) { kvReady = true; return pick(kv || {}); },
+      function () { kvReady = true; return {}; });
+  }
+  function mirrorSettings(settings) {
+    if (!signedIn() || !kvReady) return;
+    var patch = pick(settings);
+    var json = JSON.stringify(patch);
+    if (json === kvLast) return;
+    clearTimeout(kvTimer);
+    kvTimer = setTimeout(function () { kvLast = json; sdk().patchSettings(patch); }, 800);
+  }
+
+  /* Controls: platform overrides over DEFAULT_BINDINGS. */
+  function loadBindings() {
+    var s = sdk();
+    var p = s && s.signedIn ? s.loadBindings(DEFAULT_BINDINGS).catch(function () { return clone(DEFAULT_BINDINGS); })
+      : Promise.resolve(clone(DEFAULT_BINDINGS));
+    return p.then(function (b) { bindings = b; codeMap = null; return b; });
+  }
+  function actionFor(e) {
+    if (!codeMap) {
+      codeMap = {};
+      Object.keys(bindings).forEach(function (a) { bindings[a].forEach(function (c) { codeMap[c] = a; }); });
+    }
+    if (e.code) return codeMap[e.code] || null;
+    var k = e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    return KEY_FALLBACK[k] || null;
+  }
+  function keyLabel(action) {
+    return (bindings[action] || []).map(function (c) { return KEY_NAMES[c] || c.replace(/^Key|^Digit/, ''); }).join(' / ');
+  }
+
+  function inviteLink() { return signedIn() ? sdk().inviteLink() : null; }
+  function copyInvite() {
+    var link = inviteLink();
+    if (!link) return Promise.resolve(false);
+    try {
+      return navigator.clipboard.writeText(link).then(function () { return true; }, function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
   }
 
   return {
-    init: api,
+    init: init,
     headers: headers,
     profileFor: profileFor,
     fetchProfile: fetchProfile,
     fetchLeaderboard: fetchLeaderboard,
-    refreshToken: refreshToken,
+    refreshToken: function () { var s = sdk(); return s ? s.refresh() : Promise.resolve(null); },
     onUpdate: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
-    get hosted() { return hosted; },
+    loadCloud: loadCloud,
+    saveCloud: saveCloud,
+    flushSave: flushSave,
+    getSettings: getSettings,
+    mirrorSettings: mirrorSettings,
+    loadBindings: loadBindings,
+    actionFor: actionFor,
+    keyLabel: keyLabel,
+    inviteLink: inviteLink,
+    copyInvite: copyInvite,
+    canSignIn: function () { var s = sdk(); return !!(s && s.canSignIn()); },
+    signIn: function () { var s = sdk(); return !!(s && s.signIn()); },
+    get hosted() { return signedIn(); },
     get profile() { return profile; },
-    get userId() { return userId; },
-    get slug() { return slug; }
+    get userId() { var s = sdk(); return s ? s.userId : null; },
+    get slug() { var s = sdk(); return s ? s.slug : null; }
   };
 });
