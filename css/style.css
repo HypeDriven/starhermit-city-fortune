@@ -21,6 +21,9 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 main#main { height: 100%; }
+/* Large screens: the UI zooms by --ui-scale (ui-scale.js; 1 up to a 1600x1000 viewport); every vw/vh length in
+   this sheet is divided by it. The board canvas is sized from its visual rect, so it stays sharp without help. */
+main#main, body > .overlay, body > .captions, body > .fps-meter, body > .cf-toast { zoom: var(--ui-scale, 1); }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
@@ -57,27 +60,27 @@ body {
 
 .panel {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 20px 24px; margin: auto; max-width: min(92vw, 560px);
+  padding: 20px 24px; margin: auto; max-width: min(calc(92vw / var(--ui-scale, 1)), 560px);
   box-shadow: 0 6px 24px rgba(60, 45, 20, 0.18);
 }
 .panel.center { text-align: center; }
 
 /* Key art (assets/key-art.webp) above the title; hidden by onerror if missing. */
-.title-panel { max-width: min(92vw, 640px); padding-top: 0; overflow: hidden; }
+.title-panel { max-width: min(calc(92vw / var(--ui-scale, 1)), 640px); padding-top: 0; overflow: hidden; }
 .title-art {
   display: block; width: calc(100% + 48px); margin: 0 -24px 12px; height: auto;
-  max-height: min(38vh, 300px); object-fit: cover; object-position: center 62%;
+  max-height: min(calc(38vh / var(--ui-scale, 1)), 300px); object-fit: cover; object-position: center 62%;
   border-bottom: 3px solid var(--accent);
 }
 /* Results illustration (assets/results-album.webp). */
-.results-panel { max-width: min(92vw, 640px); padding-top: 0; overflow: hidden; }
+.results-panel { max-width: min(calc(92vw / var(--ui-scale, 1)), 640px); padding-top: 0; overflow: hidden; }
 .results-art {
   display: block; width: calc(100% + 48px); margin: 0 -24px 10px; height: auto;
-  max-height: min(24vh, 180px); object-fit: cover; object-position: center 45%;
+  max-height: min(calc(24vh / var(--ui-scale, 1)), 180px); object-fit: cover; object-position: center 45%;
   border-bottom: 3px solid var(--accent);
 }
-.panel.wide { max-width: min(96vw, 900px); }
-.panel.scrollable { max-height: 88vh; overflow-y: auto; }
+.panel.wide { max-width: min(calc(96vw / var(--ui-scale, 1)), 900px); }
+.panel.scrollable { max-height: calc(88vh / var(--ui-scale, 1)); overflow-y: auto; }
 
 h1 { margin: 0 0 8px; font-size: 1.9rem; letter-spacing: 0.02em; }
 h2 { font-size: 1.1rem; margin: 12px 0 6px; }
@@ -103,7 +106,7 @@ button.big { font-size: 1.15rem; padding: 12px 28px; margin-top: 8px; }
 .list-btn .stars { color: var(--accent); letter-spacing: 0.1em; }
 .tag { font-size: 0.72rem; background: var(--accent); color: var(--accent-ink); border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
 
-.scroll-list { max-height: 40vh; overflow-y: auto; padding-left: 0; list-style: none; margin: 0; }
+.scroll-list { max-height: calc(40vh / var(--ui-scale, 1)); overflow-y: auto; padding-left: 0; list-style: none; margin: 0; }
 ol.scroll-list { padding-left: 0; }
 
 .mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; text-align: left; }
@@ -156,7 +159,7 @@ ol.scroll-list { padding-left: 0; }
 .tray button { flex: 0 1 auto; }
 
 .board-mirror {
-  display: none; max-height: 30vh; overflow-y: auto; margin: 0;
+  display: none; max-height: calc(30vh / var(--ui-scale, 1)); overflow-y: auto; margin: 0;
   padding: 8px 12px 8px 28px; background: var(--panel);
   border: 1px solid var(--line); border-radius: var(--radius); font-size: 0.85rem;
 }
@@ -178,7 +181,7 @@ body.high-contrast .board-mirror .mirror-tile[aria-pressed="true"] { background:
 
 /* In flow, not floating: the card must never cover the tray or board list. */
 .lesson-card {
-  order: -1; align-self: center; width: min(92vw, 620px);
+  order: -1; align-self: center; width: min(calc(92vw / var(--ui-scale, 1)), 620px);
   margin: calc(8px + var(--safe-t)) 10px 0;
   background: var(--panel); border: 2px solid var(--accent);
   border-radius: var(--radius); padding: 10px 16px;
@@ -196,7 +199,7 @@ body.high-contrast .board-mirror .mirror-tile[aria-pressed="true"] { background:
 }
 .overlay[hidden] { display: none; }
 
-.breakdown { margin: 12px auto; border-collapse: collapse; min-width: min(80vw, 320px); }
+.breakdown { margin: 12px auto; border-collapse: collapse; min-width: min(calc(80vw / var(--ui-scale, 1)), 320px); }
 .breakdown th, .breakdown td { text-align: left; padding: 4px 12px; border-bottom: 1px solid var(--line); }
 .breakdown td { text-align: right; font-variant-numeric: tabular-nums; }
 .breakdown .total th, .breakdown .total td { font-weight: 800; border-top: 2px solid var(--ink); }
@@ -261,7 +264,7 @@ body.left-handed .tray { flex-direction: row-reverse; }
   .compact-only { display: inline-block; }
   .game-grid { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
   /* drawers stop above the action tray so Roll/Pause/Album stay reachable */
-  .rail { position: fixed; top: 0; bottom: calc(64px + var(--safe-b)); width: min(78vw, 300px); z-index: 30;
+  .rail { position: fixed; top: 0; bottom: calc(64px + var(--safe-b)); width: min(calc(78vw / var(--ui-scale, 1)), 300px); z-index: 30;
           transition: transform 0.2s ease, visibility 0.2s; visibility: hidden; overflow-y: auto;
           padding-top: 48px; }
   .rail-left { left: 0; transform: translateX(-105%); }
@@ -283,7 +286,7 @@ body.left-handed .tray { flex-direction: row-reverse; }
   .tray { position: sticky; bottom: 0; background: var(--bg); padding: 6px 0 calc(6px + var(--safe-b)); z-index: 31; }
   .tray button { flex: 1 1 30%; }
   /* drawers open as a top sheet over the board; the tray stays clear below */
-  .rail { top: 0; bottom: auto; left: 0; right: 0; width: auto; max-height: 58vh;
+  .rail { top: 0; bottom: auto; left: 0; right: 0; width: auto; max-height: calc(58vh / var(--ui-scale, 1));
           transform: translateY(-105%); border-radius: 0 0 var(--radius) var(--radius); }
   .rail-left, .rail-right { transform: translateY(-105%); }
   .game-screen.rail-left-open .rail-left, .game-screen.rail-right-open .rail-right { transform: none; }
@@ -292,8 +295,8 @@ body.left-handed .tray { flex-direction: row-reverse; }
 
 /* landscape mobile: narrow status rail on the side */
 @media (max-height: 480px) {
-  .title-art { max-height: 22vh; }
-  .results-art { max-height: 14vh; }
+  .title-art { max-height: calc(22vh / var(--ui-scale, 1)); }
+  .results-art { max-height: calc(14vh / var(--ui-scale, 1)); }
 }
 @media (max-height: 480px) and (orientation: landscape) {
   .game-grid { grid-template-columns: 150px 1fr; grid-template-rows: 1fr; }
@@ -302,7 +305,7 @@ body.left-handed .tray { flex-direction: row-reverse; }
   /* the news log is a drawer that the News button opens */
   .rail-right { bottom: calc(52px + var(--safe-b)); }
   #canvas-wrap { min-height: 120px; flex: 1; }
-  .board-mirror { max-height: 30vh; overflow-y: auto; }
+  .board-mirror { max-height: calc(30vh / var(--ui-scale, 1)); overflow-y: auto; }
   .tray button { min-height: 44px; }
 }
 
@@ -310,8 +313,8 @@ body.left-handed .tray { flex-direction: row-reverse; }
   .panel { padding: 14px 16px; }
   .title-panel, .results-panel { padding-top: 0; }
   .title-art, .results-art { width: calc(100% + 32px); margin-left: -16px; margin-right: -16px; }
-  .title-art { max-height: 26vh; }
-  .results-art { max-height: 16vh; }
+  .title-art { max-height: calc(26vh / var(--ui-scale, 1)); }
+  .results-art { max-height: calc(16vh / var(--ui-scale, 1)); }
   h1 { font-size: 1.5rem; }
   p, li, dd { max-width: 70ch; }
 }
@@ -320,6 +323,6 @@ body.left-handed .tray { flex-direction: row-reverse; }
 #screen-title nav button[hidden] { display: none; }
 .cf-toast {
   position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%);
-  z-index: 1000; max-width: min(92vw, 32em); padding: 10px 16px; border-radius: 10px; text-align: center;
+  z-index: 1000; max-width: min(calc(92vw / var(--ui-scale, 1)), 32em); padding: 10px 16px; border-radius: 10px; text-align: center;
   background: #fffaf0; color: #2b2622; border: 1px solid rgba(43, 38, 34, 0.25); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }
