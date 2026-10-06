@@ -326,3 +326,12 @@ body.left-handed .tray { flex-direction: row-reverse; }
   z-index: 1000; max-width: min(calc(92vw / var(--ui-scale, 1)), 32em); padding: 10px 16px; border-radius: 10px; text-align: center;
   background: #fffaf0; color: #2b2622; border: 1px solid rgba(43, 38, 34, 0.25); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }
+
+/* Phone landscape: the whole title menu fits without scrolling — drop the
+   key art and tighten the status lines so Settings/Help stay above the fold. */
+@media (max-height: 420px) and (orientation: landscape) {
+  .title-art { display: none; }
+  .title-panel { padding-top: 12px; padding-bottom: 12px; }
+  #screen-title h1 { margin: 0 0 4px; }
+  #screen-title p { margin: 4px 0; }
+}

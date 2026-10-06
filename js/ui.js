@@ -88,7 +88,16 @@
     if (screen === 'modes') refreshModes();
     var first = document.querySelector('#screen-' + screen + ' [data-autofocus]') ||
                 document.querySelector('#screen-' + screen + ' button');
-    if (first) first.focus();
+    if (first) first.focus({ preventScroll: true });
+    resetScroll($('screen-' + screen));
+  }
+
+  // A screen or dialog opens at its top (heading visible), even when the
+  // control it focuses (often Done at the bottom) is below the fold.
+  function resetScroll(root) {
+    if (!root) return;
+    root.scrollTop = 0;
+    root.querySelectorAll('*').forEach(function (e) { if (e.scrollTop) e.scrollTop = 0; });
   }
 
   // Background content is inert while a modal overlay is open: screen readers
@@ -106,7 +115,8 @@
     overlayStack.push({ id: id, prev: prev });
     syncInert();
     var f = el.querySelector('[data-autofocus]') || el.querySelector('button, input, select');
-    if (f) f.focus();
+    if (f) f.focus({ preventScroll: true });
+    resetScroll(el);
     Audio.play('ui');
   }
   function closeOverlay(id) {
@@ -126,7 +136,7 @@
       var top = overlayStack[overlayStack.length - 1];
       var host = top && $(top.id);
       var f = host && (host.querySelector('[data-autofocus]') || host.querySelector('button, input, select'));
-      if (f) f.focus();
+      if (f) f.focus({ preventScroll: true });
     }
   }
   function closeTopOverlay() {
