@@ -13,7 +13,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | Session | 3–9 minutes per round (par times 240–560 s); a Learn lesson is under a minute |
 | Platforms | Desktop and mobile browsers (portrait and landscape); WebGL optional |
 | Rendering | Three.js r160 (`vendor/three.module.min.js`, addons in `vendor/addons/`) perspective scene of a circular paper board with quality presets and optional post-processing; all UI is semantic HTML beside/over the canvas; a DOM "board list" is the playable fallback without WebGL |
-| Hosting | Static files plus `server.js` (Node 18+, no dependencies) which also verifies ranked scores by replaying them |
+| Hosting | Static files; on StarHermit the platform script is `score-script.js` (leaderboard posting); `server.js` (Node 18+, no dependencies) is the local dev server, which also verifies scores by replaying them |
 
 **File map**
 
@@ -33,7 +33,8 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `js/post.js` | ES module re-exporting the r160 addons the renderer uses (EffectComposer, passes, FXAA, RoomEnvironment) |
 | `js/ui.js` | Screens, HUD, input, event presentation, lessons, results, settings, achievements, server calls; owns the round clock |
 | `js/main.js` | Module bootstrap: exposes `THREE` on `window`, loads `js/post.js` into `window.CFThreeAddons` (null if it fails), calls `CFUI.boot()`, shows a readable error if boot throws |
-| `server.js` | Static host with `/api/v1/time`, `/daily`, `/score`, `/leaderboard`; replay-verifies submissions into `server-boards.json` |
+| `score-script.js` | StarHermit platform script (`server=`): range-checks a finished round's total and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`) |
+| `server.js` | Local dev server: static host with `/api/v1/time`, `/daily`, `/score`, `/leaderboard`; replay-verifies submissions into `server-boards.json` |
 | `tests/run-tests.js` | 32 unit/property tests (`npm test`) |
 | `tests/platform.test.mjs` | StarHermit adapter over the SDK with a stubbed fetch (`npm test`) |
 | `tests/e2e.mjs` | Playwright playthrough of the real UI at desktop and mobile viewports (`npm run test:e2e`) |
@@ -42,7 +43,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `sfx/` | 25 Opus clips, `manifest.txt` (canonical), `manifest.json` (loader + generator input), `manifest.md` (generator output) |
 | `assets/` | `key-art.webp`, `results-album.webp`, `paper-grain.webp` |
 | `coverart.png`, `icon.png`, `favicon.svg` | Store cover (1200×675), 256×256 icon, tab icon |
-| `starhermit.txt` | `name=City Fortune`, `launch=index.html`, `owner=…`, `server=server.js`, `cover=coverart.png` |
+| `starhermit.txt` | `name=City Fortune`, `launch=index.html`, `owner=…`, `server=score-script.js`, `cover=coverart.png` |
 | `LICENSE.md` | PolyForm Noncommercial 1.0.0 |
 
 ## 2. Vision and design pillars
@@ -152,7 +153,7 @@ total      = sum of the seven
 | Mode | Entry | Content | Assists | Ranked |
 |---|---|---|---|---|
 | Journey | Play → Journey list (40 stages; stage n+1 unlocks with ≥1 star on n) | `Content.JOURNEY`: seeds 101–140, 8–17 tiles, 2–3 pages, turn limits 30–50, time limits on j16/j20/j26/j30/j33/j38/j40; rival from j04; four MASTERY stages (j10, j20, j30, j40) | Undo + Hint | No (stars, best score) |
-| Daily | Title or Modes → "Play today's daily" | `Content.dailyConfig(date)`: one immutable config per UTC day (server time offset applied); districts, tolls, stickers, deck, rival name and theme rotate on `day % 7`; 40 turns; time limit on rotation 6 | Undo + Hint | Yes: submitted to `/api/v1/score` |
+| Daily | Title or Modes → "Play today's daily" | `Content.dailyConfig(date)`: one immutable config per UTC day (server time offset applied); districts, tolls, stickers, deck, rival name and theme rotate on `day % 7`; 40 turns; time limit on rotation 6 | Undo + Hint | Yes: posted to the platform `high-score` board like every non-lesson round |
 | Challenge | Modes → Challenges (6) | c1 Express Circuit (22 turns, no undo), c2 Speed Tycoon (240 s), c3 Thin Wallet (120 coins), c4 Stiff Rents (aggressive Brick), c5 Sticker Sprint, c6 Grand Constraint (turns + clock, no assists) | Per config | Yes |
 | Practice | Modes → Practice | Relaxed (solo), Standard (Penny), Expert (Brick, reserve 0) | Undo + Hint | No |
 | Learn | Modes → Learn (5 lessons) | t1 Roll and move, t2 Buy property (opens on a forced deed offer), t3 Build up (pre-owned Harbor 1, 400 coins), t4 Finish an album page (buy Harbor 2), t5 Second chances (undo) | Per lesson | No; completion ticks persist |
@@ -193,7 +194,7 @@ Deep links: `#daily`, `#practice-<id>`, `#journey-<id or number>`, `#challenge-<
 - **Setup overlay**: name, Rules, Expected duration, Players, Assists, Ranked, Briefing; Start / Cancel.
 - **Game** (wide ≥ 1024 px): left rail Album (+ rival line), centre playfield (canvas, selection line, status row with phase / turn / ⏱ / coins / score, action tray, optional board list), right rail City news (last 30 lines). Compact (< 1024 px): rails become slide-in drawers toggled by Album / News buttons that appear only in the tray. Portrait phone: status row on top, square canvas, tray sticky at the bottom. Landscape phone (≤ 480 px tall): a 150 px static album rail on the left, no news rail, canvas fills the rest. The lesson card is in normal flow above the grid so it can never cover the tray.
 - **Large screens** (> 1600×1000): `ui-scale.js` sets `--ui-scale` (1 up to a 1600×1000 viewport, then the smaller of width/1600 and height/1000, capped at 2.5); `#main`, the overlays, captions, FPS meter and toasts are CSS-`zoom`ed by it with every vw/vh length divided by it, so screens, rails, dialogs and the board grow proportionally. The board canvas is sized from its on-screen rect, so it stays sharp at any zoom.
-- **Results**: album illustration, headline ("Album complete!" / "Round over"), reason, seven-row breakdown table with total, newly unlocked achievement chips, next-action line, server verification line, then Next (journey wins), Retry, Modes, Title.
+- **Results**: album illustration, headline ("Album complete!" / "Round over"), reason, seven-row breakdown table with total, newly unlocked achievement chips, next-action line, leaderboard line (signed in only), then Next (journey wins), Retry, Modes, Title.
 - **Settings**: Audio (4 sliders, mute, captions), Graphics (quality preset, render scale, nine per-effect selects, adaptive resolution, frame-rate readout, cost summary, theme, palette; see §8 Graphics), Accessibility & controls (7 checkboxes). **Help**: goal, tile legend, rival rule, key bindings, and "Right now: legal actions" generated from the live state.
 
 Safe areas: every fixed/sticky element pads by `env(safe-area-inset-*)`; the WebGL banner and game grid pad the top inset. Nothing critical sits under browser chrome: the tray is the bottom-most element and the Pause button lives in it.
@@ -273,7 +274,7 @@ Conventions follow https://wiki.starhermit.com/. `index.html` loads `starhermit-
 
 | Feature | Status today |
 |---|---|
-| Packaging | `starhermit.txt` with `name`, `launch=index.html`, `owner`, `server=server.js`, `cover`, and one `control.*` line per keyboard action; `LICENSE.md` at the root; `tests/` and `tools/` are dev-only |
+| Packaging | `starhermit.txt` with `name`, `launch=index.html`, `owner`, `server=score-script.js`, `cover`, and one `control.*` line per keyboard action; `LICENSE.md` at the root; `tests/` and `tools/` are dev-only |
 | Launch token / renewal | The SDK reads `#game_token=<jwt>` (library launch) or `#access_token=` (sign-in return), strips it, keeps it in memory, takes the slug from `game_scope` and renews it via `POST /api/v1/games/{slug}/launch-token`. If renewal is refused a toast says the player was signed out, the sign-in button returns and play continues locally |
 | Sign in | On `*.starhermit.com` without a token the title shows **Sign in with StarHermit**; hidden when signed in and locally |
 | Profile / account line | The title shows "Playing as <nickname> — connected to the platform" (`StarHermit.profile()`, `Player <id>` fallback, never `/api/v1/me`); offline it says progress is stored on this device |
@@ -281,12 +282,13 @@ Conventions follow https://wiki.starhermit.com/. `index.html` loads `starhermit-
 | Settings KV | Volumes, mute, captions, graphics preset and overrides, theme, reduced motion, contrast, palette, large text, handedness, haptics, board mirror and confirm-moves are patched to the game's settings KV on change (debounced, after the KV was read) and applied at boot, where the platform value wins |
 | Controls | Eleven keyboard actions are declared in `starhermit.txt`; `loadBindings()` resolves the player's keys, keydown routes by `event.code` (gamepad-style synthetic events by key), and Help lists the effective keys |
 | Invite link | Signed in, the title shows **Invite a friend**, copying `StarHermit.inviteLink()` with a confirmation toast |
-| Own-server routes | Signed in only: `probeServerTime()` reads `/api/v1/time` (daily date and session ids use the offset); daily and challenge rounds POST `{entry, replay}` to `/api/v1/score` with the bearer token and the account id; the server replays and verifies every command and the client shows "Verified by server. Rank #r of n". Standalone uses the client clock and "Offline — score saved locally" |
+| Server time | Signed in only: `probeServerTime()` reads `/api/v1/time` (daily date and session ids use the offset). Standalone uses the client clock |
+| Leaderboard posting | Signed in, every finished round except lessons posts its total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board, integer, higher is better, 0–100,000); the results screen shows "Leaderboard rank: #N" (or posted / not posted). Standalone posts nothing and shows no line |
 | Leaderboards UI | Local top-20 from `localStorage`; signed in, the game's first platform board (`StarHermit.leaderboard()`, nicknames resolved, own row marked) renders above it when one exists |
-| Platform achievements | No — `server.js` is the game's own Node server, not a platform session script, and declares none; achievements stay local in the save doc |
+| Platform achievements | No — `score-script.js` reports only scores; achievements stay local in the save doc |
 | Presence, friends, session invites, chat, voice, sessions, replays | Not used: the rival is a local AI and the Friends panel lists recent local sessions |
 
-New platform strings (sign in, invite, toasts) ship in all nine locales (`js/platform-strings.js`, picked from `navigator.language`).
+New platform strings (sign in, invite, toasts, leaderboard line) ship in all nine locales (`js/platform-strings.js`, picked from `navigator.language`).
 
 ## 13. Technical architecture
 
@@ -328,7 +330,7 @@ QA bar as checkable statements: (1) a new player can reach a die roll in two cli
 
 - English only apart from the Graphics settings section; no locale switch.
 - "Confirm buys and builds" is persisted but no confirmation step exists; buys and builds apply immediately.
-- Ranked verification depends on `server.js` being the host (the e2e stub returns "rejected", the game reports "Kept locally"); the own-server `/api/v1/leaderboard` is still not displayed — the hosted read uses the platform leaderboard instead.
+- The client no longer calls `server.js`'s `/api/v1/score` replay verification (it is exercised only by the server tests); platform posts are range-checked, not replay-verified.
 - Friends panel is a local summary; there is no platform friend list, presence or invitation.
 - Events `land` and `coin` have clips but no trigger in the UI.
 - The results reason for a win on a clock-only config (turnLimit 0) reads "with 0 turns to spare".

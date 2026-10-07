@@ -720,7 +720,8 @@
     checkAchievements(s, newlyUnlocked);
     saveDoc();
 
-    // leaderboard entry (local board + server submit for daily/challenge)
+    // leaderboard entry (local board; signed in, every non-lesson round also
+    // posts its total to the platform high-score board)
     var entry = {
       sessionId: sess.id, configId: cfg.id, kind: cfg.kind,
       contentVersion: cfg.version, seed: cfg.seed >>> 0,
@@ -732,16 +733,8 @@
     boards.entries.push(entry);
     if (boards.entries.length > 200) boards.entries = boards.entries.slice(-200);
     Store.saveBoards(boards);
-    var serverNote = '';
-    if (cfg.kind === 'daily' || cfg.kind === 'challenge') {
-      submitScore(entry, sess.replay, function (msg) {
-        serverNote = msg;
-        var el = $('results-server');
-        if (el) el.textContent = msg;
-      });
-    }
-
     showResults(s, entry, newlyUnlocked);
+    if (cfg.kind !== 'tutorial') postToLeaderboard(s.score.total);
   }
 
   function assistsUsed(cfg) {
@@ -855,19 +848,18 @@
     }).catch(function () { serverOffsetMs = 0; });
   }
 
-  function submitScore(entry, replay, cb) {
-    // Attach the account identity when hosted so verified server rows can be
-    // attributed (and resolved to nicknames on the boards).
-    if (!Platform.hosted) { cb('Offline — score saved locally.'); return; }
-    if (Platform.userId) entry.playerId = Platform.userId;
-    fetch('/api/v1/score', {
-      method: 'POST',
-      headers: Platform.headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ entry: entry, replay: replay })
-    }).then(function (r) { return r.json(); }).then(function (j) {
-      if (j && j.ok) cb('Verified by server. Rank #' + j.rank + ' of ' + j.of + ' on this board.');
-      else cb('Server rejected the score: ' + ((j && j.error) || 'unknown') + '. Kept locally.');
-    }).catch(function () { cb('Offline — score saved locally.'); });
+  // Signed in only: post the round total through the platform and show the
+  // player's rank on the results screen. Standalone shows nothing.
+  function postToLeaderboard(total) {
+    var el = $('results-server');
+    if (!el || !Platform || !Platform.hosted) return;
+    el.textContent = PT.lbPosting;
+    var mine = sess;
+    Platform.submitScore(total).then(function (r) {
+      if (sess !== mine) return;
+      el.textContent = !r.posted ? PT.lbNotPosted
+        : r.rank ? root.PlatformStrings.fmtPlatform(PT.lbRank, { rank: r.rank }) : PT.lbPosted;
+    });
   }
 
   // ---------- pause / resume / leave ----------
