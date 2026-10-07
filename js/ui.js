@@ -55,10 +55,13 @@
     if (doc.settings.haptics && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
   }
 
-  // Every save mirrors to the StarHermit cloud slot and settings KV when signed in.
+  // Every save mirrors to the StarHermit cloud slot and settings KV when signed in,
+  // but only once the start-up cloud restore has landed (cloudReady): booting on
+  // the 3 s timeout must not push the stale local doc over a newer cloud one.
+  var cloudReady = false;
   function saveDoc() {
     var wrapped = Store.save(doc);
-    if (Platform.hosted) {
+    if (Platform.hosted && cloudReady) {
       Platform.saveCloud(wrapped);
       Platform.mirrorSettings(doc.settings);
     }
@@ -1366,14 +1369,20 @@
       var d = remote || Store.load();
       var kv = r[1] || {};
       Object.keys(kv).forEach(function (key) { d.settings[key] = kv[key]; });
-      if (remote || Object.keys(kv).length) Store.save(d);
-    }).catch(function () { /* local save stays authoritative */ });
+      if (remote || Object.keys(kv).length) {
+        Store.save(d);
+        // Landed after bootGame (3 s timeout): adopt it in memory as well, or the
+        // next saveDoc would write the stale local doc back over it.
+        if (doc) { doc = Store.load(); applyAllSettings(); refreshTitle(); }
+      }
+    }).catch(function () { /* local save stays authoritative */ })
+      .then(function () { cloudReady = true; });
   }
 
   function boot() {
     // platform identity (the SDK already read the token in index.html)
     try { Platform.init(); } catch (e) { /* offline */ }
-    if (!Platform.hosted) { bootGame(); return; }
+    if (!Platform.hosted) { cloudReady = true; bootGame(); return; }
     Promise.race([restoreFromPlatform(), new Promise(function (r) { setTimeout(r, 3000); })]).then(bootGame, bootGame);
   }
 
