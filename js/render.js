@@ -960,9 +960,9 @@
     var key = postKey(w, h);
     if (key !== S.postKey) { S.postKey = key; buildPost(w, h); }
     if (S.composer) {
-      try { S.composer.render(dt / 1000); return; } catch (e) { disposeComposer(); S.postFailed = true; }
+      try { (globalThis.GameOptions ? globalThis.GameOptions.draw(S.composer.renderer, () => S.composer.render(dt / 1000)) : S.composer.render(dt / 1000)); return; } catch (e) { disposeComposer(); S.postFailed = true; }
     }
-    S.renderer.render(S.scene, S.camera);
+    (globalThis.GameOptions ? globalThis.GameOptions.draw(S.renderer, () => S.renderer.render(S.scene, S.camera)) : S.renderer.render(S.scene, S.camera));
   }
 
   function isAvailable() { return S.ok; }
