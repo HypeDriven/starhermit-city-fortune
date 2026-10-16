@@ -14,8 +14,13 @@ function boot() {
     var el = document.getElementById('screen-loading');
     if (el) {
       el.hidden = false;
-      el.innerHTML = '<div class="panel center"><h1>City Fortune</h1><p>Something went wrong while starting: ' +
-        String(err && err.message || err) + '</p></div>';
+      var msg = window.CFI18N ? window.CFI18N.T('Something went wrong while starting: {error}', { error: String(err && err.message || err) })
+        : 'Something went wrong while starting: ' + String(err && err.message || err);
+      el.textContent = '';
+      var panel = document.createElement('div'); panel.className = 'panel center';
+      var h = document.createElement('h1'); h.textContent = 'City Fortune';
+      var p = document.createElement('p'); p.textContent = msg;
+      panel.append(h, p); el.appendChild(panel);
     }
     console.error(err);
   }

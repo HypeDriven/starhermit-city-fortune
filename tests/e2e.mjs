@@ -24,6 +24,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { stubStarHermit, launchToken } from './starhermit-e2e.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = {
@@ -256,6 +257,75 @@ async function runPass(pass, contextOpts, opts = {}) {
       if (post.postFailed) throw new Error('post-processing chain failed at ultra');
       await page.screenshot({ path: shot('ultra', pass) });
     });
+
+    // Signed in against a stubbed StarHermit API whose account prefers fr-CA:
+    // Automatic resolves to Canadian French; switching to Italian from Settings
+    // while the round is paused re-renders the HUD, tray, news log and dialogs
+    // in place without touching the round, syncs ui.language, and Report a
+    // problem posts a bug report.
+    await step('Language: Automatic follows the StarHermit preference; live switch mid-round; ui.language; report a problem', async () => {
+      const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+      await page.goto('about:blank');
+      await page.goto(`${BASE}/index.html#game_token=${launchToken()}`, { waitUntil: 'load' });
+      await page.waitForSelector('#screen-title:not([hidden])', { timeout: 15000 });
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA' && document.getElementById('btn-play').textContent === 'Jouer');
+      await page.click('#btn-play');
+      await page.waitForSelector('#screen-modes:not([hidden])');
+      if ((await page.textContent('#modes-h')) !== 'Choisissez un mode') throw new Error('modes not French');
+      await page.locator('#journey-list button').first().click();
+      await page.waitForSelector('#overlay-setup:not([hidden])');
+      if ((await page.textContent('#setup-title')) !== 'Premiers pas') throw new Error('setup not French');
+      await page.click('#btn-setup-start');
+      await page.waitForSelector('#screen-game:not([hidden])');
+      await waitActionable(page);
+      await page.click('#btn-roll');
+      await waitActionable(page);
+      const before = await readState(page);
+      await page.click('#btn-pause');
+      await page.waitForSelector('#overlay-pause:not([hidden])');
+      if ((await page.textContent('#pause-h')) !== 'En pause') throw new Error('pause not French');
+      await page.click('#btn-pause-settings');
+      await page.waitForSelector('#overlay-settings:not([hidden])');
+      if ((await page.textContent('#settings-h')) !== 'Paramètres') throw new Error('settings not French');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.waitFor({ state: 'attached' });
+      if ((await choice.count()) !== 1) throw new Error('expected exactly one language selector');
+      await choice.scrollIntoViewIfNeeded();
+      const auto = await choice.locator('option').first().textContent();
+      if (auto !== 'Automatique — Français (Canada)') throw new Error('Automatic label not resolved: ' + auto);
+      await choice.selectOption('it-IT');
+      await page.waitForFunction(() => document.documentElement.lang === 'it-IT'
+        && document.getElementById('settings-h').textContent === 'Impostazioni'
+        && document.getElementById('btn-roll').textContent === 'Tira'
+        && /^(Tocca a te: tira|Decidi: compra o salta)$/.test(document.getElementById('hud-phase').textContent)
+        && /^Turno \d/.test(document.getElementById('hud-turn').textContent)
+        && document.querySelector('#event-log li').textContent.startsWith('Benvenuto in Primi passi.')
+        && document.querySelector('#gfx-settings [data-gfx-i18n="quality"]').textContent === 'Qualità');
+      await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]')?.textContent || ''));
+      if (calls.settings['ui.language']?.choice !== 'it-IT') throw new Error('ui.language not saved: ' + JSON.stringify(calls.settings));
+      const report = page.locator('[data-game-report="title"]');
+      await report.scrollIntoViewIfNeeded();
+      await report.fill('Test report');
+      await page.click('[data-game-report="send"]');
+      await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]').textContent));
+      if (!calls.reports?.[0] || calls.reports[0].kind !== 'bug') throw new Error('report not posted');
+      const spill = await page.evaluate(() => {
+        const w = document.documentElement.clientWidth;
+        return [...document.querySelectorAll('#overlay-settings select, #overlay-settings input, #overlay-settings button, #overlay-settings textarea, #overlay-settings label')]
+          .filter((n) => n.offsetParent && n.getBoundingClientRect().right > w + 1).map((n) => n.outerHTML.slice(0, 60));
+      });
+      if (spill.length) throw new Error('settings controls cut off: ' + spill.join(','));
+      await page.screenshot({ path: shot('language', pass) });
+      await choice.selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA' && document.getElementById('btn-roll').textContent === 'Lancer');
+      await page.locator('#btn-settings-close').scrollIntoViewIfNeeded();
+      await page.click('#btn-settings-close');
+      if ((await page.textContent('#pause-h')) !== 'En pause') throw new Error('pause overlay not re-rendered');
+      await page.click('#btn-resume');
+      const after = await readState(page);
+      if (after.turn !== before.turn || after.coins !== before.coins || after.phase !== before.phase) throw new Error('round changed during the language switch');
+      await page.unroute(/\/api\/v1\//);
+    });
   } finally {
     const bad = errors.filter(Boolean);
     await context.close();
@@ -273,7 +343,7 @@ try {
   });
   await runPass('desktop', { viewport: { width: 1280, height: 800 } }, { ultraCheck: true });
   await runPass('mobile', { viewport: { width: 390, height: 844 }, hasTouch: true });
-  console.log('PASS: city-fortune e2e — desktop and mobile playthroughs completed clean');
+  console.log('PASS: city-fortune e2e — desktop and mobile playthroughs + language/report step completed clean');
 } catch (err) {
   console.error('E2E FAILED:', err && err.message || err);
   process.exitCode = 1;

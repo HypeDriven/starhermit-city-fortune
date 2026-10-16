@@ -28,7 +28,7 @@
   <!-- Loading -->
   <section id="screen-loading" class="screen" aria-label="Loading">
     <div class="panel center">
-      <h1>City Fortune</h1>
+      <h1 data-i18n-skip>City Fortune</h1>
       <p>Unfolding the paper city…</p>
       <noscript><p><strong>JavaScript is required to play.</strong></p></noscript>
     </div>
@@ -38,7 +38,7 @@
   <section id="screen-title" class="screen" hidden aria-labelledby="title-h">
     <div class="panel center title-panel">
       <img id="title-art" class="title-art" src="assets/key-art.webp" width="1280" height="720" alt="" decoding="async" onerror="this.hidden=true">
-      <h1 id="title-h">City Fortune</h1>
+      <h1 id="title-h" data-i18n-skip>City Fortune</h1>
       <p class="tagline">A pop-up paper city. Roll, collect, complete the album.</p>
       <button id="btn-play" class="primary big" data-autofocus>Play</button>
       <button id="btn-title-daily" class="big">Daily challenge</button>
@@ -205,8 +205,8 @@
       <label><input id="set-captions" type="checkbox"> Captions for sounds</label>
     </fieldset>
     <fieldset id="gfx-fieldset">
-      <legend id="gfx-legend">Graphics</legend>
-      <div id="gfx-settings" class="gfx-settings">
+      <legend id="gfx-legend" data-i18n-skip>Graphics</legend>
+      <div id="gfx-settings" class="gfx-settings" data-i18n-skip>
         <label><span data-gfx-i18n="quality">Quality</span>
           <select id="set-tier">
             <option value="auto">Auto</option>
@@ -280,6 +280,9 @@
   </div>
 </div>
 
+<script src="sh-language.js"></script>
+<script src="js/strings.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/rng.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/content.js"></script>

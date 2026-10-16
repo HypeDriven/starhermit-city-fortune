@@ -16,6 +16,12 @@
   'use strict';
 
   var SAVE_DEBOUNCE_MS = 2000;
+  // Player-facing fallbacks follow the game language (js/i18n.js) when loaded.
+  function tr(key, vars) {
+    var I = (typeof globalThis !== 'undefined' ? globalThis : root).CFI18N;
+    if (I) return I.T(key, vars);
+    return String(key).replace(/\{(\w+)\}/g, function (m, k) { return vars && k in vars ? String(vars[k]) : m; });
+  }
   function sdk() { return (typeof globalThis !== 'undefined' ? globalThis : root).StarHermit || null; }
   function signedIn() { var s = sdk(); return !!(s && s.signedIn); }
 
@@ -43,6 +49,7 @@
 
   var profile = null;          // { name } for the signed-in player
   var listeners = [];
+  var conflictListeners = [];
   var hooked = false;
   var bindings = clone(DEFAULT_BINDINGS);
   var codeMap = null;
@@ -61,6 +68,15 @@
       s.on('auth', function (a) {
         if (!a.signedIn) profile = null;
         notify();
+      });
+      // Another device saved since our last load: the SDK refused this write
+      // and blocks further ones until a reload. Reload the cloud copy and hand
+      // it to the game (onConflict) to merge and save again.
+      s.on('saveconflict', function () {
+        s.loadSave().then(function (raw) {
+          if (s.saveConflicted()) return;
+          conflictListeners.forEach(function (fn) { try { fn(raw); } catch (e) { /* listener */ } });
+        });
       });
     }
     if (signedIn()) {
@@ -84,9 +100,10 @@
   function profileFor(pid) {
     if (!pid || typeof pid !== 'string') return Promise.resolve('player');
     var s = sdk();
-    if (!s || !s.signedIn) return Promise.resolve('Player ' + pid.slice(0, 6));
-    return s.profile(pid).then(function (p) { return (p && p.displayName) || 'Player ' + pid.slice(0, 6); },
-      function () { return 'Player ' + pid.slice(0, 6); });
+    var fallback = tr('Player {id}', { id: pid.slice(0, 6) });
+    if (!s || !s.signedIn) return Promise.resolve(fallback);
+    return s.profile(pid).then(function (p) { return (p && p.displayName) || fallback; },
+      function () { return fallback; });
   }
   function fetchProfile() {
     var s = sdk();
@@ -107,7 +124,7 @@
       return Promise.all((res.items || []).slice(0, 20).map(function (e) {
         var uid = String(e.userId != null ? e.userId : (e.playerId || ''));
         return profileFor(uid).then(function (name) {
-          return { name: uid === me ? 'You (' + name + ')' : name, score: e.score != null ? e.score : e.value };
+          return { name: uid === me ? tr('You ({name})', { name: name }) : name, score: e.score != null ? e.score : e.value };
         });
       }));
     }).catch(function () { return null; });
@@ -178,6 +195,8 @@
     fetchLeaderboard: fetchLeaderboard,
     refreshToken: function () { var s = sdk(); return s ? s.refresh() : Promise.resolve(null); },
     onUpdate: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
+    /** fn(remoteRaw|null) after a save conflict: the newer cloud copy, reloaded (writes allowed again). */
+    onConflict: function (fn) { if (typeof fn === 'function') conflictListeners.push(fn); },
     loadCloud: loadCloud,
     saveCloud: saveCloud,
     flushSave: flushSave,

@@ -11,6 +11,38 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
+  // ---------- localization (js/i18n.js: window.CFI18N) ----------
+  // English source strings are the keys. T() translates now; N() only marks a
+  // string for translation at display time.
+  function T(key, vars) {
+    if (root.CFI18N) return root.CFI18N.T(key, vars);
+    return String(key).replace(/\{(\w+)\}/g, function (m, k) { return vars && k in vars ? String(vars[k]) : m; });
+  }
+  function N(key) { return key; }
+  function curLang() { return (root.CFI18N && root.CFI18N.lang) || navigator.language || 'en-US'; }
+
+  // Display names for content data (which stays English).
+  function districtName(d) { return Content.DISTRICTS[d] ? T(Content.DISTRICTS[d].label) : d; }
+  function tileLabel(t, i) {
+    if (!t) return '';
+    if (t.t === 'prop' && t.d) {
+      var m = /(\d+)$/.exec(t.label || '');
+      return T('{district} {n}', { district: districtName(t.d), n: m ? m[1] : '' });
+    }
+    if (t.label) return T(t.label);
+    return T('Tile {n}', { n: i });
+  }
+  function pageName(pg) {
+    if (!pg) return '';
+    if (pg.type === 'district') return T('{district} set', { district: districtName(pg.d) });
+    return T(pg.name);
+  }
+  function cfgName(cfg) {
+    if (!cfg) return '';
+    if (cfg.kind === 'daily' && cfg.date) return T('Daily {date}', { date: cfg.date });
+    return T(cfg.name);
+  }
+
   // ---------- app state ----------
   var doc = null;            // persisted save document
   var sess = null;           // active CFGame session
@@ -40,7 +72,7 @@
 
   // ---------- helpers ----------
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function fmtCoins(n) { return n + ' coins'; }
+  function fmtCoins(n) { return T('{n} coins', { n: n }); }
   function fmtTime(ms) {
     var s = Math.max(0, Math.ceil(ms / 1000));
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -67,7 +99,7 @@
     }
   }
 
-  var PT = root.PlatformStrings.platformStrings(navigator.language); // StarHermit UI strings
+  var PT = root.PlatformStrings.platformStrings(curLang()); // StarHermit UI strings (game language)
   function toast(text) {
     var host = document.body;
     var t = document.createElement('div');
@@ -160,11 +192,11 @@
     var p = doc.progress;
     var stars = 0;
     for (var k in p.journeyStars) stars += p.journeyStars[k];
-    $('title-progress').textContent =
-      'Journey: ' + Object.keys(p.journeyStars).length + ' / ' + Content.JOURNEY.length + ' stages · ' + stars + ' stars';
+    $('title-progress').textContent = T('Journey: {done} / {total} stages · {stars} stars',
+      { done: Object.keys(p.journeyStars).length, total: Content.JOURNEY.length, stars: stars });
     var today = Content.utcDateString(serverNowMs());
     $('title-daily').textContent = p.dailiesDone[today]
-      ? 'Daily done — score ' + p.dailiesDone[today] : 'Daily challenge available';
+      ? T('Daily done — score {score}', { score: p.dailiesDone[today] }) : T('Daily challenge available');
   }
 
   function refreshModes() {
@@ -178,9 +210,9 @@
       var b = document.createElement('button');
       b.className = 'list-btn';
       b.disabled = !unlocked;
-      b.innerHTML = esc(lv.name) + ' <span class="stars" aria-label="' + stars + ' stars">' +
+      b.innerHTML = esc(T(lv.name)) + ' <span class="stars" aria-label="' + esc(T(stars === 1 ? '{n} star' : '{n} stars', { n: stars })) + '">' +
         '★'.repeat(stars) + '☆'.repeat(Math.max(0, 3 - stars)) + '</span>' +
-        (lv.mastery ? ' <span class="tag">Mastery</span>' : '');
+        (lv.mastery ? ' <span class="tag">' + esc(T('Mastery')) + '</span>' : '');
       b.addEventListener('click', function () { openSetup(lv, 'journey'); });
       li.appendChild(b);
       jl.appendChild(li);
@@ -192,7 +224,7 @@
       var li = document.createElement('li');
       var b = document.createElement('button');
       b.className = 'list-btn';
-      b.textContent = c.name + (doc.progress.challengeBest[c.id] ? ' — best ' + doc.progress.challengeBest[c.id] : '');
+      b.textContent = T(c.name) + (doc.progress.challengeBest[c.id] ? ' — ' + T('best {score}', { score: doc.progress.challengeBest[c.id] }) : '');
       b.addEventListener('click', function () { openSetup(c, 'challenge'); });
       li.appendChild(b);
       cl.appendChild(li);
@@ -204,7 +236,7 @@
       var li = document.createElement('li');
       var b = document.createElement('button');
       b.className = 'list-btn';
-      b.textContent = p.name;
+      b.textContent = T(p.name);
       b.addEventListener('click', function () { openSetup(p, 'practice'); });
       li.appendChild(b);
       pl.appendChild(li);
@@ -216,7 +248,7 @@
       var li = document.createElement('li');
       var b = document.createElement('button');
       b.className = 'list-btn';
-      b.textContent = ls.title + (doc.progress.tutorialDone[ls.id] ? ' ✓' : '');
+      b.textContent = T(ls.title) + (doc.progress.tutorialDone[ls.id] ? ' ✓' : '');
       b.addEventListener('click', function () { startLesson(ls); });
       li.appendChild(b);
       ll.appendChild(li);
@@ -226,26 +258,37 @@
   var setupCfg = null, setupMode = null;
   function openSetup(cfg, mode) {
     setupCfg = cfg; setupMode = mode;
-    $('setup-title').textContent = cfg.name;
-    var rows = [];
-    rows.push(['Rules', describeRules(cfg)]);
-    rows.push(['Expected duration', cfg.par ? '~' + Math.ceil((cfg.par.timeSec || 420) / 60) + ' min' : '—']);
-    rows.push(['Players', cfg.rival ? 'You vs ' + cfg.rival.name + ' (local deterministic rival)' : 'Solo']);
-    rows.push(['Assists', (cfg.mechanics.undo ? 'Undo ' : '') + (cfg.mechanics.hint ? 'Hint' : '') || 'None']);
-    rows.push(['Ranked', (mode === 'daily' || mode === 'challenge') ? 'Yes' : 'No (progress only)']);
-    if (cfg.intro) rows.push(['Briefing', cfg.intro]);
-    $('setup-rules').innerHTML = rows.map(function (r) {
-      return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>';
-    }).join('');
+    renderSetup();
     openOverlay('overlay-setup');
   }
 
+  // Setup dialog body (re-rendered in place on a language change).
+  function renderSetup() {
+    var cfg = setupCfg, mode = setupMode;
+    if (!cfg) return;
+    $('setup-title').textContent = cfgName(cfg);
+    var assists = [];
+    if (cfg.mechanics.undo) assists.push(T('Undo'));
+    if (cfg.mechanics.hint) assists.push(T('Hint'));
+    var rows = [];
+    rows.push([T('Rules'), describeRules(cfg)]);
+    rows.push([T('Expected duration'), cfg.par ? T('~{n} min', { n: Math.ceil((cfg.par.timeSec || 420) / 60) }) : '—']);
+    rows.push([T('Players'), cfg.rival ? T('You vs {name} (local deterministic rival)', { name: cfg.rival.name }) : T('Solo')]);
+    rows.push([T('Assists'), assists.join(' ') || T('None')]);
+    rows.push([T('Ranked'), (mode === 'daily' || mode === 'challenge') ? T('Yes') : T('No (progress only)')]);
+    if (cfg.intro) rows.push([T('Briefing'), T(cfg.intro)]);
+    $('setup-rules').innerHTML = rows.map(function (r) {
+      return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>';
+    }).join('');
+  }
+
   function describeRules(cfg) {
-    var parts = [];
-    parts.push('Complete ' + cfg.album.length + ' album page' + (cfg.album.length > 1 ? 's' : ''));
-    if (cfg.turnLimit) parts.push('within ' + cfg.turnLimit + ' turns');
-    if (cfg.timeLimitSec) parts.push('in ' + fmtTime(cfg.timeLimitSec * 1000));
-    return parts.join(' ');
+    var n = cfg.album.length;
+    var base = T(n === 1 ? 'Complete {n} album page' : 'Complete {n} album pages', { n: n });
+    if (cfg.turnLimit && cfg.timeLimitSec) return T('{goal} within {turns} turns in {time}', { goal: base, turns: cfg.turnLimit, time: fmtTime(cfg.timeLimitSec * 1000) });
+    if (cfg.turnLimit) return T('{goal} within {turns} turns', { goal: base, turns: cfg.turnLimit });
+    if (cfg.timeLimitSec) return T('{goal} in {time}', { goal: base, time: fmtTime(cfg.timeLimitSec * 1000) });
+    return base;
   }
 
   // ---------- game start ----------
@@ -255,6 +298,7 @@
     sess = Game.createSession(cfg, lessonObj || null, serverNowMs());
     lesson = lessonObj || null;
     lessonStep = 0;
+    lessonCompleted = false;
     selectedTile = null;
     clockReset();
     presenting = false;
@@ -276,8 +320,8 @@
     renderBoardMirror();
     if (lesson) showLessonCard();
     else $('lesson-card').hidden = true;
-    announce(cfg.name + '. ' + describeRules(cfg) + '. Your turn: roll the die.');
-    logEvent('Welcome to ' + cfg.name + '. ' + (cfg.intro || ''));
+    announce(T('{name}. {rules}. Your turn: roll the die.', { name: cfgName(cfg), rules: describeRules(cfg) }));
+    logEvent(function () { return T('Welcome to {name}.', { name: cfgName(cfg) }) + (cfg.intro ? ' ' + T(cfg.intro) : ''); });
     // a lesson may open directly on a deed offer: surface it like any other
     if (sess.state.phase === 'buy' && sess.state.pending) promptBuy();
   }
@@ -290,9 +334,11 @@
   function showLessonCard() {
     var card = $('lesson-card');
     card.hidden = false;
-    $('lesson-title').textContent = lesson.title;
-    $('lesson-text').textContent = lesson.text;
+    $('lesson-title').textContent = T(lesson.title);
+    $('lesson-text').textContent = doc.progress.tutorialDone[lesson.id] && lessonCompleted
+      ? T('Lesson complete! You can keep playing this board or leave via Pause.') : T(lesson.text);
   }
+  var lessonCompleted = false;
   function lessonEventCheck(events) {
     if (!lesson || doc.progress.tutorialDone[lesson.id]) return;
     var goal = lesson.goal;
@@ -302,8 +348,9 @@
     if (hits >= goal.count) {
       doc.progress.tutorialDone[lesson.id] = true;
       saveDoc();
-      $('lesson-text').textContent = 'Lesson complete! You can keep playing this board or leave via Pause.';
-      announce('Lesson complete: ' + lesson.title);
+      lessonCompleted = true;
+      $('lesson-text').textContent = T('Lesson complete! You can keep playing this board or leave via Pause.');
+      announce(T('Lesson complete: {title}', { title: T(lesson.title) }));
       Audio.play('page');
     }
   }
@@ -332,27 +379,27 @@
 
   function explainInvalid(reason) {
     var msgs = {
-      'game-ended': 'This round is over.',
-      'wrong-phase': 'That action is not available right now.',
-      'unknown-command': 'Unknown action.',
-      'malformed-command': 'That action was not understood.',
-      'bad-tile': 'That tile cannot be built on.',
-      'unaffordable': 'Not enough coins.',
-      'not-owned': 'You do not own that property.',
-      'max-level': 'Already at maximum height.',
-      'undo-disabled': 'Undo is not allowed in this mode.',
-      'nothing-to-undo': 'Nothing to undo.'
+      'game-ended': N('This round is over.'),
+      'wrong-phase': N('That action is not available right now.'),
+      'unknown-command': N('Unknown action.'),
+      'malformed-command': N('That action was not understood.'),
+      'bad-tile': N('That tile cannot be built on.'),
+      'unaffordable': N('Not enough coins.'),
+      'not-owned': N('You do not own that property.'),
+      'max-level': N('Already at maximum height.'),
+      'undo-disabled': N('Undo is not allowed in this mode.'),
+      'nothing-to-undo': N('Nothing to undo.')
     };
-    var msg = msgs[reason] || ('Cannot: ' + reason);
+    var text = function () { return msgs[reason] ? T(msgs[reason]) : T('Cannot: {reason}', { reason: reason }); };
     Audio.play('invalid');
-    announce(msg);
-    logEvent('⚠ ' + msg, true);
+    announce(text());
+    logEvent(function () { return '⚠ ' + text(); }, true);
   }
 
   function promptBuy() {
     var p = sess.state.pending;
     var tile = sess.state.cfg.tiles[p.tile];
-    announce(tile.label + ' is for sale for ' + fmtCoins(p.price) + '. Buy or skip?');
+    announce(T('{tile} is for sale for {price}. Buy or skip?', { tile: tileLabel(tile, p.tile), price: fmtCoins(p.price) }));
     selectedTile = p.tile;
     syncSelection();
   }
@@ -381,8 +428,8 @@
     if (lesson) lessonEventCheck([{ type: 'undo' }]);
     updateHUD();
     renderBoardMirror();
-    announce('Turn undone.');
-    logEvent('↩ Undo');
+    announce(T('Turn undone.'));
+    logEvent(function () { return '↩ ' + T('Undo'); });
   }
 
   function doHint() {
@@ -390,21 +437,20 @@
     var h = Game.hint(sess.state);
     if (!h) return;
     Audio.play('hint');
-    var text = hintText(h);
-    announce(text);
-    logEvent('💡 ' + text);
+    announce(hintText(h));
+    logEvent(function () { return '💡 ' + hintText(h); });
     if (h.tile != null) { selectedTile = h.tile; syncSelection(); }
   }
 
   function hintText(h) {
     var s = sess.state;
     switch (h.why) {
-      case 'buy-district': return 'Buy ' + s.cfg.tiles[h.tile].label + ' — it completes a protected district page.';
-      case 'buy-cheap': return 'This property is affordable. Buying grows your rent income.';
-      case 'skip-expensive': return 'This one is pricey. Skipping keeps coins for your districts.';
-      case 'build-page': return 'Build on ' + s.cfg.tiles[h.tile].label + ' to finish the Developer page.';
-      case 'build-rent': return 'You have spare coins — build on ' + s.cfg.tiles[h.tile].label + ' to raise rent.';
-      default: return 'Roll the die to keep moving.';
+      case 'buy-district': return T('Buy {tile} — it completes a protected district page.', { tile: tileLabel(s.cfg.tiles[h.tile], h.tile) });
+      case 'buy-cheap': return T('This property is affordable. Buying grows your rent income.');
+      case 'skip-expensive': return T('This one is pricey. Skipping keeps coins for your districts.');
+      case 'build-page': return T('Build on {tile} to finish the Developer page.', { tile: tileLabel(s.cfg.tiles[h.tile], h.tile) });
+      case 'build-rent': return T('You have spare coins — build on {tile} to raise rent.', { tile: tileLabel(s.cfg.tiles[h.tile], h.tile) });
+      default: return T('Roll the die to keep moving.');
     }
   }
 
@@ -421,33 +467,38 @@
 
   function eventText(ev) {
     var s = sess.state, cfg = s.cfg;
-    var tileName = ev.tile != null && cfg.tiles[ev.tile] ? cfg.tiles[ev.tile].label : '';
-    var rn = s.rival ? s.rival.name : 'Rival';
+    var tileName = ev.tile != null && cfg.tiles[ev.tile] ? tileLabel(cfg.tiles[ev.tile], ev.tile) : '';
+    var rn = s.rival ? s.rival.name : T('Rival');
+    var you = ev.who === 'you';
+    var v = { rival: rn, tile: tileName, price: ev.price, amount: ev.amount, die: ev.die, salary: ev.salary };
     switch (ev.type) {
-      case 'roll': return (ev.who === 'you' ? 'You' : rn) + ' rolled ' + ev.die + '.';
-      case 'lap': return (ev.who === 'you' ? 'You pass' : rn + ' passes') + ' Start: +' + ev.salary + ' salary.' + (ev.tram ? ' (Express Tram)' : '');
-      case 'offer': return tileName + ' is for sale — ' + fmtCoins(ev.price) + '.';
-      case 'cannot-afford': return tileName + ' costs ' + fmtCoins(ev.price) + ' — you cannot afford it.';
-      case 'buy': return (ev.who === 'you' ? 'You buy ' : rn + ' buys ') + tileName + ' for ' + ev.price + '.';
-      case 'skip': return 'You pass on ' + tileName + '.';
-      case 'rival-pass': return rn + ' passes on ' + tileName + '.';
-      case 'own-visit': return (ev.who === 'you' ? 'Your own ' : rn + '’s own ') + tileName + '.';
+      case 'roll': return you ? T('You rolled {die}.', v) : T('{rival} rolled {die}.', v);
+      case 'lap': return (you ? T('You pass Start: +{salary} salary.', v) : T('{rival} passes Start: +{salary} salary.', v)) + (ev.tram ? ' (' + T('Express Tram') + ')' : '');
+      case 'offer': return T('{tile} is for sale — {coins}.', { tile: tileName, coins: fmtCoins(ev.price) });
+      case 'cannot-afford': return T('{tile} costs {coins} — you cannot afford it.', { tile: tileName, coins: fmtCoins(ev.price) });
+      case 'buy': return you ? T('You buy {tile} for {price}.', v) : T('{rival} buys {tile} for {price}.', v);
+      case 'skip': return T('You pass on {tile}.', v);
+      case 'rival-pass': return T('{rival} passes on {tile}.', v);
+      case 'own-visit': return you ? T('Your own {tile}.', v) : T('{rival}’s own {tile}.', v);
       case 'rent': return ev.from === 'you'
-        ? 'You pay ' + ev.amount + ' rent to ' + rn + ' (' + tileName + ').'
-        : rn + ' pays you ' + ev.amount + ' rent (' + tileName + ').';
-      case 'bonus': return (ev.who === 'you' ? '+' : rn + ' +') + ev.amount + ' bonus coins.';
-      case 'toll': return (ev.who === 'you' ? 'You pay ' : rn + ' pays ') + ev.amount + ' toll.';
-      case 'card': return (ev.who === 'you' ? 'You draw' : rn + ' draws') + ' “' + ev.name + '”: ' + ev.text;
-      case 'card-move': return 'Moved ' + (ev.delta > 0 ? 'forward ' + ev.delta : 'back ' + (-ev.delta)) + ' tiles.';
-      case 'card-skip': return 'The card deck is spent.';
-      case 'deck-reshuffle': return 'The card deck is reshuffled.';
-      case 'sticker': return 'Sticker collected! (' + ev.count + ')';
-      case 'park': return (ev.who === 'you' ? 'You rest' : rn + ' rests') + ' in the park.';
-      case 'page-complete': return 'Album page complete: ' + ev.name + ' (+' + ev.bonus + ')!';
-      case 'win': return 'Album complete — you win!';
+        ? T('You pay {amount} rent to {rival} ({tile}).', v)
+        : T('{rival} pays you {amount} rent ({tile}).', v);
+      case 'bonus': return you ? T('+{amount} bonus coins.', v) : T('{rival} +{amount} bonus coins.', v);
+      case 'toll': return you ? T('You pay {amount} toll.', v) : T('{rival} pays {amount} toll.', v);
+      case 'card': return T(you ? 'You draw “{card}”: {text}' : '{rival} draws “{card}”: {text}', { rival: rn, card: T(ev.name), text: T(ev.text) });
+      case 'card-move': return ev.delta > 0 ? T('Moved forward {n} tiles.', { n: ev.delta }) : T('Moved back {n} tiles.', { n: -ev.delta });
+      case 'card-skip': return T('The card deck is spent.');
+      case 'deck-reshuffle': return T('The card deck is reshuffled.');
+      case 'sticker': return T('Sticker collected! ({n})', { n: ev.count });
+      case 'park': return you ? T('You rest in the park.') : T('{rival} rests in the park.', v);
+      case 'page-complete': {
+        var pg = cfg.album.find(function (x) { return x.id === ev.page; });
+        return T('Album page complete: {name} (+{bonus})!', { name: pg ? pageName(pg) : T(ev.name), bonus: ev.bonus });
+      }
+      case 'win': return T('Album complete — you win!');
       case 'lose':
-        return { 'turn-limit': 'Out of turns.', 'time-up': 'Time is up.', resigned: 'You resigned.' }[ev.reason] || 'Round over.';
-      case 'undo': return 'Undone.';
+        return T({ 'turn-limit': N('Out of turns.'), 'time-up': N('Time is up.'), resigned: N('You resigned.') }[ev.reason] || N('Round over.'));
+      case 'undo': return T('Undone.');
       default: return ev.type;
     }
   }
@@ -478,7 +529,7 @@
       if (ev.type === 'roll' && ev.who === 'rival') sfx = 'rival';
       if (sfx) Audio.play(sfx);
       var text = eventText(ev);
-      logEvent(text);
+      logEvent((function (e) { return function () { return eventText(e); }; })(ev));
       announce(text);
       if (Render.isAvailable()) Render.syncState(sess.state, [ev], { instant: skipping || doc.settings.reducedMotion });
       setTimeout(step, delay());
@@ -508,21 +559,22 @@
       var prog = Game.pageProgress(s, pg);
       var li = document.createElement('li');
       li.className = prog.done ? 'page done' : 'page';
-      li.textContent = (prog.done ? '✓ ' : '') + pg.name + ': ' + Math.min(prog.have, prog.need) + '/' + prog.need + ' (+' + pg.bonus + ')';
+      li.textContent = (prog.done ? '✓ ' : '') + pageName(pg) + ': ' + Math.min(prog.have, prog.need) + '/' + prog.need + ' (+' + pg.bonus + ')';
       albumEl.appendChild(li);
     });
 
     $('hud-turn').textContent = cfg.turnLimit
-      ? 'Turn ' + (s.turn + 1) + ' / ' + cfg.turnLimit : 'Turn ' + (s.turn + 1);
+      ? T('Turn {n} / {limit}', { n: s.turn + 1, limit: cfg.turnLimit }) : T('Turn {n}', { n: s.turn + 1 });
     $('hud-coins').textContent = fmtCoins(s.you.coins);
-    $('hud-score').textContent = 'Score ' + Rules.currentScore(s);
-    $('hud-phase').textContent = s.terminal ? 'Round over'
-      : s.phase === 'buy' ? 'Decide: buy or skip' : 'Your turn — roll';
+    $('hud-score').textContent = T('Score {n}', { n: Rules.currentScore(s) });
+    $('hud-phase').textContent = s.terminal ? T('Round over')
+      : s.phase === 'buy' ? T('Decide: buy or skip') : T('Your turn — roll');
 
     if (s.rival) {
+      var nProps = Object.keys(s.rival.props).length;
       $('hud-rival').hidden = false;
-      $('hud-rival').textContent = s.rival.name + ': ' + fmtCoins(s.rival.coins) +
-        ', ' + Object.keys(s.rival.props).length + ' properties';
+      $('hud-rival').textContent = T(nProps === 1 ? '{name}: {coins}, {n} property' : '{name}: {coins}, {n} properties',
+        { name: s.rival.name, coins: fmtCoins(s.rival.coins), n: nProps });
     } else {
       $('hud-rival').hidden = true;
     }
@@ -566,9 +618,12 @@
     return { ok: Game.legalActions(sess.state).some(function (a) { return a.type === 'build' && a.tile === idx; }) };
   }
 
+  // text: a string or a function returning the text in the current language
+  // (re-run when the language changes, so the news log re-renders too).
   function logEvent(text, warn) {
     var log = $('event-log');
     var li = document.createElement('li');
+    if (typeof text === 'function') { li._text = text; text = text(); }
     li.textContent = text;
     if (warn) li.className = 'warn';
     log.appendChild(li);
@@ -595,20 +650,21 @@
     if (selectedTile == null) { $('selection-desc').textContent = ''; return; }
     var t = sess.state.cfg.tiles[selectedTile];
     var s = sess.state;
-    var parts = [t.label || ('Tile ' + selectedTile), tileKindLabel(t)];
+    var parts = [tileLabel(t, selectedTile), tileKindLabel(t)];
     if (t.t === 'prop') {
       var owner = Rules.ownerOf(s, selectedTile);
-      if (owner === 'you') parts.push('yours, level ' + s.you.props[selectedTile]);
-      else if (owner) parts.push(s.rival.name + '’s, level ' + s.rival.props[selectedTile]);
-      else parts.push('unowned, price ' + t.price);
-      parts.push('rent ' + t.rent.join('/'));
+      if (owner === 'you') parts.push(T('yours, level {n}', { n: s.you.props[selectedTile] }));
+      else if (owner) parts.push(T('{name}’s, level {n}', { name: s.rival.name, n: s.rival.props[selectedTile] }));
+      else parts.push(T('unowned, price {n}', { n: t.price }));
+      parts.push(T('rent {list}', { list: t.rent.join('/') }));
     }
     $('selection-desc').textContent = parts.join(' · ');
   }
 
   function tileKindLabel(t) {
-    return { start: 'Start', prop: 'property', bonus: 'bonus +' + t.amt, toll: 'toll −' + t.amt,
-             card: 'chance card', sticker: 'sticker', park: 'park' }[t.t] || t.t;
+    var v = { n: t.amt };
+    return { start: T('Start'), prop: T('property'), bonus: T('bonus +{n}', v), toll: T('toll −{n}', v),
+             card: T('chance card'), sticker: T('sticker'), park: T('park') }[t.t] || t.t;
   }
 
   function updateFocusTargets() {
@@ -626,8 +682,8 @@
     syncSelection();
     Audio.play('select');
     var t = sess.state.cfg.tiles[selectedTile];
-    announce((t.label || 'Tile ' + selectedTile) + ', ' + tileKindLabel(t) +
-      (buildLegal(selectedTile).ok ? '. Build available.' : ''));
+    announce(tileLabel(t, selectedTile) + ', ' + tileKindLabel(t) +
+      (buildLegal(selectedTile).ok ? '. ' + T('Build available.') : ''));
   }
 
   // ---------- DOM board mirror (screen-reader / no-WebGL fallback) ----------
@@ -644,17 +700,17 @@
     var s = sess.state;
     s.cfg.tiles.forEach(function (t, i) {
       var li = document.createElement('li');
-      var label = t.label || ('Tile ' + i);
-      var parts = [i === 0 ? 'Start' : label, tileKindLabel(t)];
+      var label = tileLabel(t, i);
+      var parts = [i === 0 ? T('Start') : label, tileKindLabel(t)];
       if (parts[0] === parts[1]) parts.pop();   // "Start, Start" reads badly
       if (t.t === 'prop') {
         var owner = Rules.ownerOf(s, i);
-        if (owner === 'you') parts.push('owned by you, level ' + s.you.props[i]);
-        else if (owner) parts.push('owned by ' + s.rival.name + ', level ' + s.rival.props[i]);
-        else parts.push('unowned, ' + t.price + ' coins');
+        if (owner === 'you') parts.push(T('owned by you, level {n}', { n: s.you.props[i] }));
+        else if (owner) parts.push(T('owned by {name}, level {n}', { name: s.rival.name, n: s.rival.props[i] }));
+        else parts.push(T('unowned, {coins}', { coins: fmtCoins(t.price) }));
       }
-      if (s.you.pos === i) parts.push('you are here');
-      if (s.rival && s.rival.pos === i) parts.push(s.rival.name + ' is here');
+      if (s.you.pos === i) parts.push(T('you are here'));
+      if (s.rival && s.rival.pos === i) parts.push(T('{name} is here', { name: s.rival.name }));
       // the mirror is the playable surface without WebGL: every tile selectable
       var b = document.createElement('button');
       b.className = 'mirror-tile';
@@ -681,8 +737,8 @@
     syncSelection();
     Audio.play('select');
     var t = sess.state.cfg.tiles[idx];
-    announce((t.label || 'Tile ' + idx) + ', ' + tileKindLabel(t) +
-      (buildLegal(idx).ok ? '. Build available (' + buildCostText(idx) + ').' : ''));
+    announce(tileLabel(t, idx) + ', ' + tileKindLabel(t) +
+      (buildLegal(idx).ok ? '. ' + T('Build available ({cost}).', { cost: buildCostText(idx) }) : ''));
   }
 
   // ---------- round end / results ----------
@@ -765,32 +821,44 @@
     if (p.stats.laps >= 50) unlock('laps-50');
   }
 
+  var lastResults = null;   // { s, entry, newlyUnlocked } for re-rendering on a language change
   function showResults(s, entry, newlyUnlocked) {
+    lastResults = { s: s, entry: entry, newlyUnlocked: newlyUnlocked };
+    serverLine = null;
+    renderResults();
+    show('results');
+    announce($('results-headline').textContent + ' ' + T('Total score {n}.', { n: s.score.total }));
+  }
+
+  function renderResults() {
+    if (!lastResults) return;
+    var s = lastResults.s, newlyUnlocked = lastResults.newlyUnlocked;
     var won = s.terminal.won;
-    $('results-headline').textContent = won ? 'Album complete!' : 'Round over';
+    $('results-headline').textContent = won ? T('Album complete!') : T('Round over');
+    var spare = Math.max(0, s.cfg.turnLimit - s.turn);
     $('results-reason').textContent = {
-      'album-complete': 'Every album page finished with ' + Math.max(0, s.cfg.turnLimit - s.turn) + ' turns to spare.',
-      'turn-limit': 'The turn limit ran out.',
-      'time-up': 'The clock ran out.',
-      resigned: 'You resigned.'
+      'album-complete': T(spare === 1 ? 'Every album page finished with {n} turn to spare.' : 'Every album page finished with {n} turns to spare.', { n: spare }),
+      'turn-limit': T('The turn limit ran out.'),
+      'time-up': T('The clock ran out.'),
+      resigned: T('You resigned.')
     }[s.terminal.reason] || '';
 
     var rows = [
-      ['Rent collected', s.score.rent],
-      ['Salary', s.score.salary],
-      ['Album bonuses', s.score.album],
-      ['Property value', s.score.property],
-      ['Coins in hand', s.score.coins],
-      ['Turn bonus', s.score.turnsBonus],
-      ['Time bonus', s.score.timeBonus]
+      [T('Rent collected'), s.score.rent],
+      [T('Salary'), s.score.salary],
+      [T('Album bonuses'), s.score.album],
+      [T('Property value'), s.score.property],
+      [T('Coins in hand'), s.score.coins],
+      [T('Turn bonus'), s.score.turnsBonus],
+      [T('Time bonus'), s.score.timeBonus]
     ];
     $('results-breakdown').innerHTML = rows.map(function (r) {
-      return '<tr><th scope="row">' + r[0] + '</th><td>' + r[1] + '</td></tr>';
-    }).join('') + '<tr class="total"><th scope="row">Total</th><td>' + s.score.total + '</td></tr>';
+      return '<tr><th scope="row">' + esc(r[0]) + '</th><td>' + r[1] + '</td></tr>';
+    }).join('') + '<tr class="total"><th scope="row">' + esc(T('Total')) + '</th><td>' + s.score.total + '</td></tr>';
 
     $('results-achievements').innerHTML = newlyUnlocked.map(function (k) {
       var a = Content.ACHIEVEMENTS.find(function (x) { return x.key === k; });
-      return '<li>🏅 ' + esc(a ? a.name : k) + '</li>';
+      return '<li>🏅 ' + esc(a ? T(a.name) : k) + '</li>';
     }).join('');
 
     // next recommended action
@@ -798,9 +866,9 @@
     if (s.cfg.kind === 'journey') {
       var idx = Content.JOURNEY.findIndex(function (l) { return l.id === s.cfg.id; });
       if (won && idx >= 0 && idx + 1 < Content.JOURNEY.length) {
-        next = 'Next: ' + Content.JOURNEY[idx + 1].name;
+        next = T('Next: {name}', { name: T(Content.JOURNEY[idx + 1].name) });
         $('btn-results-next').hidden = false;
-        $('btn-results-next').textContent = 'Next: ' + Content.JOURNEY[idx + 1].name;
+        $('btn-results-next').textContent = next;
         $('btn-results-next').onclick = function () { startGame(Content.JOURNEY[idx + 1], 'journey'); };
       } else {
         $('btn-results-next').hidden = true;
@@ -808,10 +876,8 @@
     } else {
       $('btn-results-next').hidden = true;
     }
-    $('results-server').textContent = '';
-    $('results-progress').textContent = next || (won ? 'Well played.' : 'Try a different approach — undo and hints are available in practice.');
-    show('results');
-    announce($('results-headline').textContent + ' Total score ' + s.score.total + '.');
+    renderServerLine();
+    $('results-progress').textContent = next || (won ? T('Well played.') : T('Try a different approach — undo and hints are available in practice.'));
   }
 
   // ---------- server (optional; graceful offline) ----------
@@ -825,11 +891,11 @@
     if (inv) { inv.textContent = PT.invite; inv.hidden = !Platform.hosted; }
     if (sib) { sib.textContent = PT.signIn; sib.hidden = !Platform.canSignIn(); }
     if (!Platform.hosted) {
-      el.textContent = 'Offline — progress is stored on this device.';
+      el.textContent = T('Offline — progress is stored on this device.');
       return;
     }
     var name = Platform.profile ? Platform.profile.name : '…';
-    el.textContent = 'Playing as ' + name + ' — connected to the platform.';
+    el.textContent = T('Playing as {name} — connected to the platform.', { name: name });
   }
 
   function probeServerTime() {
@@ -850,16 +916,25 @@
 
   // Signed in only: post the round total through the platform and show the
   // player's rank on the results screen. Standalone shows nothing.
+  var serverLine = null;   // null | 'posting' | { posted, rank }
   function postToLeaderboard(total) {
     var el = $('results-server');
     if (!el || !Platform || !Platform.hosted) return;
-    el.textContent = PT.lbPosting;
+    serverLine = 'posting';
+    renderServerLine();
     var mine = sess;
     Platform.submitScore(total).then(function (r) {
       if (sess !== mine) return;
-      el.textContent = !r.posted ? PT.lbNotPosted
-        : r.rank ? root.PlatformStrings.fmtPlatform(PT.lbRank, { rank: r.rank }) : PT.lbPosted;
+      serverLine = r;
+      renderServerLine();
     });
+  }
+  function renderServerLine() {
+    var el = $('results-server');
+    if (!el) return;
+    var r = serverLine;
+    el.textContent = !r ? '' : r === 'posting' ? PT.lbPosting : !r.posted ? PT.lbNotPosted
+      : r.rank ? root.PlatformStrings.fmtPlatform(PT.lbRank, { rank: r.rank }) : PT.lbPosted;
   }
 
   // ---------- pause / resume / leave ----------
@@ -868,7 +943,7 @@
     if (currentScreen !== 'game') return;
     clockStop();
     openOverlay('overlay-pause');
-    announce('Paused.');
+    announce(T('Paused.'));
   }
   function resumeGame() {
     closeOverlay('overlay-pause');
@@ -881,7 +956,7 @@
     clockStop();
     if (sess && !sess.state.terminal) {
       // abandoning counts as resign for stats honesty, but is not persisted as a result
-      logEvent('Left the round.');
+      logEvent(function () { return T('Left the round.'); });
     }
     sess = null; lesson = null;
     show('title');
@@ -946,7 +1021,7 @@
       var o = document.createElement('option');
       o.value = t.id;
       o.disabled = locked;
-      o.textContent = t.name + (t.unlockStars > 0 ? ' (' + t.unlockStars + '★' + (locked ? ' — locked' : '') + ')' : '');
+      o.textContent = T(t.name) + (t.unlockStars > 0 ? ' (' + t.unlockStars + '★' + (locked ? ' — ' + T('locked') : '') + ')' : '');
       themeSel.appendChild(o);
     });
     var current = Content.THEMES.find(function (t) { return t.id === doc.settings.theme; });
@@ -968,7 +1043,7 @@
     Audio.applySettings(s);
     Audio.setCaptions(s.captions, function (text) {
       var el = $('captions');
-      el.textContent = '♪ ' + text;
+      el.textContent = '♪ ' + T(text);
       clearTimeout(applyAllSettings._capT);
       applyAllSettings._capT = setTimeout(function () { el.textContent = ''; }, 2500);
     });
@@ -1033,15 +1108,15 @@
     var el = $('help-content');
     var k = Platform.keyLabel;
     var bindings = [
-      [k('confirm'), 'Confirm: roll the die, or buy when a deed is offered'],
-      [k('prev') + ' · ' + k('next'), 'Move the selection around the board'],
-      [k('buy'), 'Buy the offered property'],
-      [k('skip'), 'Skip the offered property'],
-      [k('undo'), 'Undo (where allowed)'],
-      [k('hint'), 'Hint'],
-      [k('cancel') + ' · ' + k('pause'), 'Pause / close panel'],
-      [k('mute'), 'Mute / unmute'],
-      [k('settle'), 'Skip animations (settle the board)']
+      [k('confirm'), T('Confirm: roll the die, or buy when a deed is offered')],
+      [k('prev') + ' · ' + k('next'), T('Move the selection around the board')],
+      [k('buy'), T('Buy the offered property')],
+      [k('skip'), T('Skip the offered property')],
+      [k('undo'), T('Undo (where allowed)')],
+      [k('hint'), T('Hint')],
+      [k('cancel') + ' · ' + k('pause'), T('Pause / close panel')],
+      [k('mute'), T('Mute / unmute')],
+      [k('settle'), T('Skip animations (settle the board)')]
     ];
     var cards = bindings.map(function (b) {
       return '<section class="rule-card"><h3>' + esc(b[0]) + '</h3><p>' + esc(b[1]) + '</p></section>';
@@ -1049,15 +1124,16 @@
     var examples = '';
     if (sess) {
       var acts = Game.legalActions(sess.state);
-      examples = '<section class="rule-card"><h3>Right now</h3><p>Legal actions: ' +
-        esc(acts.map(function (a) {
-          return a.type === 'build' ? 'build on ' + sess.state.cfg.tiles[a.tile].label + ' (' + a.cost + ')' : a.type;
-        }).join(', ') || 'none') + '</p></section>';
+      var ACTIONS = { roll: N('roll'), buy: N('buy'), skip: N('skip'), build: N('build'), resign: N('resign'), timeout: N('timeout') };
+      examples = '<section class="rule-card"><h3>' + esc(T('Right now')) + '</h3><p>' + esc(T('Legal actions: {list}', { list:
+        acts.map(function (a) {
+          return a.type === 'build' ? T('build on {tile} ({cost})', { tile: tileLabel(sess.state.cfg.tiles[a.tile], a.tile), cost: a.cost }) : (ACTIONS[a.type] ? T(ACTIONS[a.type]) : a.type);
+        }).join(', ') || T('none') })) + '</p></section>';
     }
     el.innerHTML =
-      '<section class="rule-card"><h3>Goal</h3><p>Roll to move around the city circuit. Buy properties, collect bonuses and stickers, build upgrades, and complete every album page before the limits.</p></section>' +
-      '<section class="rule-card"><h3>Tiles</h3><p>Colored stripe = property district (icon + label in the album). Green = bonus, red = toll, blue = chance card, purple = sticker, park = safe rest.</p></section>' +
-      '<section class="rule-card"><h3>Rival</h3><p>Your rival alternates turns with you. They pay rent on your buildings but can never buy property in album districts — your set progress is protected.</p></section>' +
+      '<section class="rule-card"><h3>' + esc(T('Goal')) + '</h3><p>' + esc(T('Roll to move around the city circuit. Buy properties, collect bonuses and stickers, build upgrades, and complete every album page before the limits.')) + '</p></section>' +
+      '<section class="rule-card"><h3>' + esc(T('Tiles')) + '</h3><p>' + esc(T('Colored stripe = property district (icon + label in the album). Green = bonus, red = toll, blue = chance card, purple = sticker, park = safe rest.')) + '</p></section>' +
+      '<section class="rule-card"><h3>' + esc(T('Rival')) + '</h3><p>' + esc(T('Your rival alternates turns with you. They pay rent on your buildings but can never buy property in album districts — your set progress is protected.')) + '</p></section>' +
       cards.join('') + examples;
   }
 
@@ -1068,7 +1144,7 @@
       var li = document.createElement('li');
       var got = doc.progress.achievements[a.key];
       li.className = got ? 'ach got' : 'ach';
-      li.innerHTML = '<strong>' + esc(a.name) + '</strong> — ' + esc(a.desc) + (got ? ' <span aria-label="unlocked">✓</span>' : '');
+      li.innerHTML = '<strong>' + esc(T(a.name)) + '</strong> — ' + esc(T(a.desc)) + (got ? ' <span aria-label="' + esc(T('unlocked')) + '">✓</span>' : '');
       el.appendChild(li);
     });
   }
@@ -1084,27 +1160,27 @@
       Platform.fetchLeaderboard().then(function (entries) {
         if (!entries || !entries.length) return;
         var h = document.createElement('h3');
-        h.textContent = 'Platform board';
+        h.textContent = T('Platform board');
         el.appendChild(h);
         entries.forEach(function (e, i) {
           var li = document.createElement('li');
-          li.textContent = '#' + (i + 1) + ' ' + e.score + ' pts — ' + e.name;
+          li.textContent = '#' + (i + 1) + ' ' + T('{n} pts', { n: e.score }) + ' — ' + e.name;
           el.appendChild(li);
         });
         var note = document.createElement('li');
         note.className = 'muted';
-        note.textContent = '— local results below —';
+        note.textContent = T('— local results below —');
         el.appendChild(note);
       }).catch(function () {});
     }
     if (!sorted.length) {
-      if (!el.children.length) el.innerHTML = '<li>No results yet — play a round!</li>';
+      if (!el.children.length) el.innerHTML = '<li>' + esc(T('No results yet — play a round!')) + '</li>';
       return;
     }
     sorted.forEach(function (e, i) {
       var li = document.createElement('li');
-      li.textContent = '#' + (i + 1) + ' ' + e.score + ' pts — ' + e.configId +
-        (e.won ? ' (won)' : '') + ' · ' + fmtTime(e.durationMs);
+      li.textContent = '#' + (i + 1) + ' ' + T('{n} pts', { n: e.score }) + ' — ' + e.configId +
+        (e.won ? ' (' + T('won') + ')' : '') + ' · ' + fmtTime(e.durationMs);
       el.appendChild(li);
     });
   }
@@ -1118,13 +1194,11 @@
     var p = doc.progress;
     var items = [];
     if (sess && sess.state.rival) {
-      items.push('<li><strong>' + esc(sess.state.rival.name) + '</strong> (rival on this board): ' +
-        esc(String(sess.state.rival.coins)) + ' coins</li>');
+      items.push('<li><strong>' + esc(sess.state.rival.name) + '</strong> ' + esc(T('(rival on this board): {coins}', { coins: fmtCoins(sess.state.rival.coins) })) + '</li>');
     }
-    items.push('<li><strong>You</strong>: ' + p.stats.wins + ' wins, ' +
-      Object.keys(p.journeyStars).length + ' stages cleared</li>');
+    items.push('<li><strong>' + esc(T('You')) + '</strong>: ' + esc(T('{wins} wins, {stages} stages cleared', { wins: p.stats.wins, stages: Object.keys(p.journeyStars).length })) + '</li>');
     recent.forEach(function (e) {
-      items.push('<li>Session ' + esc(e.sessionId) + ': ' + e.score + ' pts on ' + esc(e.configId) + '</li>');
+      items.push('<li>' + esc(T('Session {id}: {n} pts on {config}', { id: e.sessionId, n: e.score, config: e.configId })) + '</li>');
     });
     el.innerHTML = items.join('');
   }
@@ -1199,7 +1273,7 @@
     var s = sess.state;
     var lvl = s.you.props[idx];
     if (!lvl) return '';
-    return Rules.buildCost(s.cfg.tiles[idx].price, lvl) + ' coins';
+    return fmtCoins(Rules.buildCost(s.cfg.tiles[idx].price, lvl));
   }
 
   function onKey(e) {
@@ -1217,7 +1291,7 @@
       doc.settings.muted = !doc.settings.muted;
       $('set-muted').checked = doc.settings.muted;
       Audio.applySettings(doc.settings); saveDoc();
-      announce(doc.settings.muted ? 'Muted.' : 'Sound on.');
+      announce(doc.settings.muted ? T('Muted.') : T('Sound on.'));
       return;
     }
     if (currentScreen !== 'game' || !sess || anyOverlayOpen()) return;
@@ -1421,6 +1495,15 @@
         });
         renderAccountLine();
         Platform.loadBindings().then(function () { if (!$('overlay-help').hidden) refreshHelp(); });
+        // Save conflict: merge the newer cloud progress into this device's,
+        // adopt it and save the merge (Store.mergeProgress keeps the better of both).
+        Platform.onConflict(function (raw) {
+          var remote = Store.loadRaw(raw);
+          if (remote && doc) doc.progress = Store.mergeProgress(doc.progress, remote.progress);
+          saveDoc();
+          if (currentScreen === 'title') refreshTitle();
+          if (currentScreen === 'modes') refreshModes();
+        });
       } catch (e) { /* offline */ }
       // deep links: #daily, #practice-<id>, #journey-<n>, #challenge-<n>
       var hash = (location.hash || '').slice(1);
@@ -1458,6 +1541,33 @@
       }, 300);
     }, true);
   }
+
+  // Game language changed (Settings → Language, or the account preference
+  // arrived): js/i18n.js has re-applied the static markup; re-render every
+  // code-built string in place. The round, clock, board and overlays stay put.
+  function onLanguage() {
+    PT = root.PlatformStrings.platformStrings(curLang());
+    if (!doc) return;
+    if (GfxUI.relocalize) GfxUI.relocalize();
+    populateThemes();
+    refreshTitle();
+    renderAccountLine();
+    if (currentScreen === 'modes') refreshModes();
+    if (!$('overlay-setup').hidden) renderSetup();
+    if (!$('overlay-help').hidden) refreshHelp();
+    if (!$('overlay-achievements').hidden) refreshAchievements();
+    if (!$('overlay-boards').hidden) refreshBoards();
+    if (!$('overlay-friends').hidden) refreshFriends();
+    if (sess) {
+      updateHUD();
+      renderBoardMirror();
+      describeSelection();
+      if (lesson && !$('lesson-card').hidden) showLessonCard();
+      Array.prototype.forEach.call($('event-log').children, function (li) { if (li._text) li.textContent = li._text(); });
+    }
+    if (currentScreen === 'results') renderResults();
+  }
+  document.addEventListener('cf-language', onLanguage);
 
   root.CFUI = { boot: boot, _state: function () { return { sess: sess, doc: doc }; } };
 })(typeof self !== 'undefined' ? self : this);

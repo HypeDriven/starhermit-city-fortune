@@ -1,7 +1,7 @@
 /* City Fortune — Settings → Graphics section: quality preset, render scale,
  * per-effect overrides, adaptive resolution, frame-rate readout and a cost
  * summary. Strings are localized here (the rest of the game is English);
- * the locale comes from navigator.language. Browser global: window.CFGfxUI.
+ * the locale follows the game language (js/i18n.js). Browser global: window.CFGfxUI.
  */
 (function (root) {
   'use strict';
@@ -146,9 +146,15 @@
     return o;
   }
 
-  function build() {
+  // The game language (js/i18n.js) wins; the browser language is the fallback.
+  function currentLocale() {
+    if (root.CFI18N && root.CFI18N.lang) return pickLocale([root.CFI18N.lang]);
     var langs = (root.navigator && (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language])) || [];
-    locale = pickLocale(langs);
+    return pickLocale(langs);
+  }
+
+  function build() {
+    locale = currentLocale();
     t = STRINGS[locale];
     var box = $('gfx-settings');
     box.setAttribute('lang', locale);
@@ -248,6 +254,26 @@
    * opts.setSaved(saved): persist + apply live
    * opts.info(): Render.graphicsInfo() or null without WebGL
    */
+  /** Re-label every Graphics control in the current game language. */
+  function relocalize() {
+    if (!ctl) return;
+    locale = currentLocale();
+    t = STRINGS[locale];
+    var box = $('gfx-settings');
+    box.setAttribute('lang', locale);
+    box.querySelectorAll('[data-gfx-i18n]').forEach(function (el) { el.textContent = t[el.getAttribute('data-gfx-i18n')]; });
+    var legend = $('gfx-legend');
+    if (legend) { legend.textContent = t.legend; legend.setAttribute('lang', locale); }
+    Array.prototype.forEach.call($('set-tier').options, function (o) { if (o.value !== 'auto') o.textContent = t.presets[o.value]; });
+    Object.keys(Gfx.CATEGORIES).forEach(function (cat) {
+      var sel = $('set-gfx-' + cat);
+      if (!sel) return;
+      sel.parentNode.querySelector('span').textContent = t.cats[cat];
+      Array.prototype.forEach.call(sel.options, function (o) { if (o.value !== 'preset') o.textContent = t.tiers[o.value]; });
+    });
+    refresh();
+  }
+
   function setup(opts) {
     ctl = opts;
     build();
@@ -255,5 +281,5 @@
     refresh();
   }
 
-  root.CFGfxUI = { setup: setup, refresh: refresh, pickLocale: pickLocale, STRINGS: STRINGS };
+  root.CFGfxUI = { setup: setup, refresh: refresh, relocalize: relocalize, pickLocale: pickLocale, STRINGS: STRINGS };
 })(typeof self !== 'undefined' ? self : this);
