@@ -13,7 +13,7 @@
     renderScale: 'Render scale', fromPreset: 'From preset ({tier})',
     adaptive: 'Adaptive resolution', showFps: 'Show frame rate',
     postNote: 'Post-processing is unavailable in this browser, so bloom, ambient occlusion, color grading and FXAA/SMAA are off.',
-    unknownGpu: 'unknown GPU', perEffect: 'Effects',
+    unknownGpu: 'unknown GPU', level: 'Level {n}', perEffect: 'Effects',
     presets: { low: 'Low', balanced: 'Balanced', high: 'High', ultra: 'Ultra' },
     cats: { shadows: 'Shadows', ao: 'Ambient occlusion', bloom: 'Bloom', grade: 'Color grade', antialias: 'Anti-aliasing',
       reflections: 'Reflections', particles: 'Confetti', detail: 'Scene detail', background: 'Ambient motion' },
@@ -28,7 +28,7 @@
     renderScale: 'Escala de renderizado', fromPreset: 'Según el ajuste ({tier})',
     adaptive: 'Resolución adaptativa', showFps: 'Mostrar fotogramas por segundo',
     postNote: 'El posprocesado no está disponible en este navegador: el resplandor, la oclusión ambiental, la corrección de color y FXAA/SMAA están desactivados.',
-    unknownGpu: 'GPU desconocida', perEffect: 'Efectos',
+    unknownGpu: 'GPU desconocida', level: 'Nivel {n}', perEffect: 'Efectos',
     presets: { low: 'Baja', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra' },
     cats: { shadows: 'Sombras', ao: 'Oclusión ambiental', bloom: 'Resplandor', grade: 'Corrección de color', antialias: 'Antialiasing',
       reflections: 'Reflejos', particles: 'Confeti', detail: 'Detalle de la escena', background: 'Movimiento ambiental' },
@@ -43,7 +43,7 @@
     renderScale: 'Renderskalierung', fromPreset: 'Aus Voreinstellung ({tier})',
     adaptive: 'Adaptive Auflösung', showFps: 'Bildrate anzeigen',
     postNote: 'Nachbearbeitung ist in diesem Browser nicht verfügbar; Glühen, Umgebungsverdeckung, Farbkorrektur und FXAA/SMAA sind aus.',
-    unknownGpu: 'unbekannte GPU', perEffect: 'Effekte',
+    unknownGpu: 'unbekannte GPU', level: 'Stufe {n}', perEffect: 'Effekte',
     presets: { low: 'Niedrig', balanced: 'Ausgewogen', high: 'Hoch', ultra: 'Ultra' },
     cats: { shadows: 'Schatten', ao: 'Umgebungsverdeckung', bloom: 'Glühen', grade: 'Farbkorrektur', antialias: 'Kantenglättung',
       reflections: 'Spiegelungen', particles: 'Konfetti', detail: 'Szenendetails', background: 'Umgebungsbewegung' },
@@ -58,7 +58,7 @@
     renderScale: 'Échelle de rendu', fromPreset: 'Selon le préréglage ({tier})',
     adaptive: 'Résolution adaptative', showFps: 'Afficher la fréquence d’images',
     postNote: 'Le post-traitement n’est pas disponible dans ce navigateur : le halo lumineux, l’occlusion ambiante, l’étalonnage des couleurs et FXAA/SMAA sont désactivés.',
-    unknownGpu: 'GPU inconnu', perEffect: 'Effets',
+    unknownGpu: 'GPU inconnu', level: 'Niveau {n}', perEffect: 'Effets',
     presets: { low: 'Basse', balanced: 'Équilibrée', high: 'Élevée', ultra: 'Ultra' },
     cats: { shadows: 'Ombres', ao: 'Occlusion ambiante', bloom: 'Halo lumineux', grade: 'Étalonnage des couleurs', antialias: 'Anticrénelage',
       reflections: 'Reflets', particles: 'Confettis', detail: 'Détail de la scène', background: 'Mouvement ambiant' },
@@ -73,7 +73,7 @@
     renderScale: 'Escala de renderização', fromPreset: 'Da predefinição ({tier})',
     adaptive: 'Resolução adaptativa', showFps: 'Mostrar taxa de quadros',
     postNote: 'O pós-processamento não está disponível neste navegador; brilho, oclusão ambiente, correção de cor e FXAA/SMAA estão desligados.',
-    unknownGpu: 'GPU desconhecida', perEffect: 'Efeitos',
+    unknownGpu: 'GPU desconhecida', level: 'Nível {n}', perEffect: 'Efeitos',
     presets: { low: 'Baixa', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra' },
     cats: { shadows: 'Sombras', ao: 'Oclusão ambiente', bloom: 'Brilho', grade: 'Correção de cor', antialias: 'Antisserrilhamento',
       reflections: 'Reflexos', particles: 'Confete', detail: 'Detalhes da cena', background: 'Movimento ambiente' },
@@ -88,7 +88,7 @@
     renderScale: 'Scala di rendering', fromPreset: 'Dal preset ({tier})',
     adaptive: 'Risoluzione adattiva', showFps: 'Mostra frequenza fotogrammi',
     postNote: 'La post-elaborazione non è disponibile in questo browser: bagliore, occlusione ambientale, correzione colore e FXAA/SMAA sono disattivati.',
-    unknownGpu: 'GPU sconosciuta', perEffect: 'Effetti',
+    unknownGpu: 'GPU sconosciuta', level: 'Livello {n}', perEffect: 'Effetti',
     presets: { low: 'Bassa', balanced: 'Bilanciata', high: 'Alta', ultra: 'Ultra' },
     cats: { shadows: 'Ombre', ao: 'Occlusione ambientale', bloom: 'Bagliore', grade: 'Correzione colore', antialias: 'Antialiasing',
       reflections: 'Riflessi', particles: 'Coriandoli', detail: 'Dettaglio scena', background: 'Movimento ambientale' },
@@ -242,7 +242,9 @@
     $('set-gfx-scale-val').textContent = pct + '%';
     $('set-gfx-adaptive').checked = r.adaptive;
     $('set-gfx-fps').checked = r.showFps;
-    var parts = [info && info.gpu ? info.gpu : t.unknownGpu, Gfx.describe(r, info ? info.pixels : null, t.cost)];
+    var parts = [info && info.gpu ? info.gpu : t.unknownGpu];
+    if (info && info.level != null) parts.push(t.level.replace('{n}', info.level));
+    parts.push(Gfx.describe(r, info ? info.pixels : null, t.cost));
     $('gfx-summary').textContent = parts.join(' · ');
     $('gfx-post-note').hidden = !(info && info.postFailed);
     document.body.setAttribute('data-gfx-preset', r.preset);

@@ -1211,10 +1211,7 @@
     var dt = Math.min(0.1, (t - lastFrame) / 1000 || 0.016);
     lastFrame = t;
     if (hidden) return; // background tabs: no rendering work
-    if (Render.isAvailable() && currentScreen === 'game') {
-      Render.update(dt);
-      Render.render();
-    }
+    if (Render.isAvailable() && currentScreen === 'game') Render.frame(dt);
     if (currentScreen === 'game' && sess && !sess.state.terminal) {
       updateTimer();
       if (isTimeUp() && !presenting) handleTimeUp();

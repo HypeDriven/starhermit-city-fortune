@@ -101,7 +101,10 @@
     S.renderer.toneMappingExposure = 1.05;
     S.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     S.gpu = gpuName(S.renderer);
-    S.detected = Gfx.detectPreset(S.gpu, { mobile: isMobileDevice() });
+    // StarHermit hardware level → Auto preset (SwiftShader = level 0 → Low; phones cap at Balanced).
+    var system = root.StarHermitGpu ? root.StarHermitGpu.detectSystem() : { mobile: isMobileDevice() };
+    S.level = Gfx.detectLevel(S.gpu, system);
+    S.detected = Gfx.presetForLevel(S.level);
     S.scene = new THREE.Scene();
     S.camera = new THREE.PerspectiveCamera(FRAMING.FOV, 1, 0.1, 60);
     S.camera.position.set(0, FRAMING.CAM_Y, FRAMING.CAM_Z);
@@ -140,7 +143,7 @@
   function setGraphics(saved) {
     if (!S.ok) return false;
     var prev = S.g;
-    var g = Gfx.resolve(saved || {}, S.detected);
+    var g = Gfx.resolve(saved || {}, S.detected, S.level);
     S.g = g;
     var r = S.renderer;
     r.shadowMap.enabled = g.shadowMap > 0;
@@ -156,7 +159,11 @@
       (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { m.needsUpdate = true; });
     });
     if (S.canvas) S.canvas.setAttribute('data-gfx-preset', g.preset);
-    return !!(prev && S.board && (prev.detail !== g.detail || prev.background !== g.background));
+    // Preset asset variants (material class, grain texture, geometry LOD, mote count) are built into the board.
+    var pb = (prev && prev.budget) || {}, nb = g.budget;
+    var assets = pb.material !== nb.material || pb.grain !== nb.grain || pb.segments !== nb.segments || pb.motes !== nb.motes || pb.decor !== nb.decor;
+    if (prev && assets && S.grain) { S.grain.dispose(); S.grain = null; }
+    return !!(prev && S.board && (prev.detail !== g.detail || prev.background !== g.background || assets));
   }
 
   function applyKeyShadow() {
@@ -216,7 +223,7 @@
   function graphicsInfo() {
     var px = S.size[0] && S.pixelRatio ? [Math.round(S.size[0] * S.pixelRatio), Math.round(S.size[1] * S.pixelRatio)] : null;
     return {
-      gpu: S.gpu, detected: S.detected, resolved: S.g, pixels: px,
+      gpu: S.gpu, level: S.level, detected: S.detected, resolved: S.g, pixels: px,
       fps: Math.round(S.fps || 0), adaptiveScale: Math.round(S.adaptiveScale * 100) / 100,
       postFailed: !!S.postFailed
     };
@@ -228,6 +235,15 @@
       S.composer.dispose();
     }
     S.composer = null; S.gradePass = null;
+  }
+
+  // Run a post pass at a fraction of the frame (per-preset budget). EffectComposer sizes every pass to the
+  // full frame in addPass/setSize, so the pass's own setSize is wrapped to apply the scale.
+  function atScale(pass, k) {
+    if (!(k > 0 && k < 1)) return pass;
+    var setSize = pass.setSize.bind(pass);
+    pass.setSize = function (w, h) { setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k))); };
+    return pass;
   }
 
   function postKey(w, h) {
@@ -252,7 +268,7 @@
       composer.setSize(w, h);
       composer.addPass(new A.RenderPass(S.scene, S.camera));
       if (g.ao !== 'off') {
-        var ao = new A.GTAOPass(S.scene, S.camera, pw, ph);
+        var ao = atScale(new A.GTAOPass(S.scene, S.camera, pw, ph), g.budget.aoRes);
         ao.output = A.GTAOPass.OUTPUT.Default;
         ao.blendIntensity = 0.85;
         var hi = g.ao === 'high';
@@ -262,7 +278,7 @@
       }
       if (g.bloom === 'on') {
         // High threshold: only emissive windows, the selection glow and bright highlights bloom.
-        composer.addPass(new A.UnrealBloomPass(new THREE.Vector2(w, h), 0.42, 0.35, 1.0));
+        composer.addPass(atScale(new A.UnrealBloomPass(new THREE.Vector2(w, h), 0.42, 0.35, 1.0), g.budget.bloomRes));
       }
       if (g.grade === 'on') {
         S.gradePass = new A.ShaderPass(GradeShader);
@@ -311,7 +327,7 @@
   function grainTexture() {
     var THREE = T();
     if (S.grain) return S.grain;
-    var n = 128, cv = document.createElement('canvas');
+    var n = (S.g && S.g.budget.grain) || 128, cv = document.createElement('canvas'); // per-preset texture variant
     cv.width = cv.height = n;
     var ctx = cv.getContext('2d');
     var img = ctx.createImageData(n, n), d = img.data;
@@ -324,8 +340,8 @@
     ctx.putImageData(img, 0, 0);
     ctx.globalAlpha = 0.09;
     ctx.strokeStyle = '#7a6a52';
-    for (var k = 0; k < 70; k++) {
-      var x = rnd() * n, y = rnd() * n, a = rnd() * Math.PI, len = 4 + rnd() * 14;
+    for (var k = 0; k < Math.round(70 * (n / 128) * (n / 128)); k++) {
+      var x = rnd() * n, y = rnd() * n, a = rnd() * Math.PI, len = (4 + rnd() * 14) * Math.max(1, n / 256);
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); ctx.stroke();
     }
     var tex = new THREE.CanvasTexture(cv);
@@ -350,6 +366,7 @@
       });
       S.scene.remove(S.board);
     }
+    paperCache = {};
     S.board = null; S.tileMeshes = []; S.tokens = {}; S.particles = []; S.anims = [];
     S.marker = null; S.ghostHighlights = []; S.props = []; S.motes = null;
     S.key = null; S.hemi = null; S.windowMat = null;
@@ -360,12 +377,26 @@
 
   // Card-stock material. At detailed quality it carries the paper grain and a
   // faint environment reflection; plain matches the original flat look.
+  // Paper materials are shared per (colour, roughness) within a board: fewer program/uniform switches per
+  // frame (the CPU budget on High/Ultra). Nothing mutates them per mesh; clearBoard() resets the cache.
+  var paperCache = {};
   function paperMat(color, rough) {
+    var key = color + '|' + rough;
+    if (!paperCache[key]) paperCache[key] = makePaperMat(color, rough);
+    return paperCache[key];
+  }
+  function makePaperMat(color, rough) {
     var THREE = T();
     var o = { color: color, roughness: rough == null ? 0.9 : rough, metalness: 0.02, flatShading: true };
     if (detailed()) { o.map = grainTexture(); o.envMapIntensity = 0.15; }
+    // Material class per preset budget: Lambert card on Low, Standard above.
+    if (S.g && S.g.budget.material === 'lambert') return new THREE.MeshLambertMaterial({ color: o.color, map: o.map || null, flatShading: true });
     return new THREE.MeshStandardMaterial(o);
   }
+
+  // Round-geometry LOD: radial segment count scaled by the preset budget (at least `min`, default 4;
+  // the large board discs keep 40 so their silhouette stays round on every preset).
+  function seg(n, min) { return Math.max(min || 4, Math.round(n * ((S.g && S.g.budget.segments) || 1))); }
 
   function shadowed(obj) {
     obj.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -410,17 +441,20 @@
     if (floors > 0 && S.windowMat) {
       var ww = Math.min(0.035, w * 0.22), wh = Math.min(0.035, wallH / (floors + 1) * 0.6);
       var wg = geom(new THREE.PlaneGeometry(ww, wh));
+      // One instanced draw for all of a house's window cut-outs.
+      var wins = new THREE.InstancedMesh(wg, S.windowMat, floors * 4), wi = 0, wm = new THREE.Object3D();
       for (var f = 0; f < floors; f++) {
         var y = 0.02 + wallH * (f + 0.6) / (floors + 0.2);
         [-1, 1].forEach(function (side) {
           for (var c = -1; c <= 1; c += 2) {
-            var win = new THREE.Mesh(wg, S.windowMat);
-            win.position.set(c * w * 0.24, y, side * (d / 2 + 0.001));
-            if (side < 0) win.rotation.y = Math.PI;
-            g.add(win);
+            wm.position.set(c * w * 0.24, y, side * (d / 2 + 0.001));
+            wm.rotation.set(0, side < 0 ? Math.PI : 0, 0);
+            wm.updateMatrix();
+            wins.setMatrixAt(wi++, wm.matrix);
           }
         });
       }
+      g.add(wins);
     }
     return g;
   }
@@ -428,11 +462,11 @@
   function paperTree(h, color) {
     var THREE = T();
     var g = new THREE.Group();
-    var trunk = new THREE.Mesh(geom(new THREE.CylinderGeometry(0.008, 0.01, h * 0.3, 5)), paperMat(0x8a6a48));
+    var trunk = new THREE.Mesh(geom(new THREE.CylinderGeometry(0.008, 0.01, h * 0.3, seg(5))), paperMat(0x8a6a48));
     trunk.position.y = h * 0.15;
     g.add(trunk);
     for (var i = 0; i < 2; i++) {
-      var cone = new THREE.Mesh(geom(new THREE.ConeGeometry(h * (0.32 - i * 0.08), h * 0.55, 6)), paperMat(color, 0.85));
+      var cone = new THREE.Mesh(geom(new THREE.ConeGeometry(h * (0.32 - i * 0.08), h * 0.55, seg(6))), paperMat(color, 0.85));
       cone.position.y = h * (0.45 + i * 0.25);
       g.add(cone);
     }
@@ -486,7 +520,7 @@
 
     // craft table under the board (catches the board's shadow)
     if (rich) {
-      var table = new THREE.Mesh(geom(new THREE.CircleGeometry(7, 48)),
+      var table = new THREE.Mesh(geom(new THREE.CircleGeometry(7, seg(48, 40))),
         paperMat(mixColor(p.edge, p.sky, 0.35), 1));
       table.rotation.x = -Math.PI / 2;
       table.position.y = -0.145;
@@ -495,19 +529,19 @@
     }
 
     // table / ground disc
-    var ground = new THREE.Mesh(geom(new THREE.CylinderGeometry(1.85, 2.0, 0.08, 48)), paperMat(p.ground, 1));
+    var ground = new THREE.Mesh(geom(new THREE.CylinderGeometry(1.85, 2.0, 0.08, seg(48, 40))), paperMat(p.ground, 1));
     ground.position.y = -0.1;
     ground.receiveShadow = true;
     ground.castShadow = true;
     board.add(ground);
-    var rim = new THREE.Mesh(geom(new THREE.TorusGeometry(1.85, 0.035, 10, 64)), paperMat(p.edge, 0.8));
+    var rim = new THREE.Mesh(geom(new THREE.TorusGeometry(1.85, 0.035, seg(10, 6), seg(64, 40))), paperMat(p.edge, 0.8));
     rim.rotation.x = Math.PI / 2;
     rim.position.y = -0.065;
     rim.castShadow = true;
     board.add(rim);
 
     // ring path ribbon
-    var ring = new THREE.Mesh(geom(new THREE.RingGeometry(BOARD.RING_R - 0.21, BOARD.RING_R + 0.21, 64)), paperMat(p.ring, 1));
+    var ring = new THREE.Mesh(geom(new THREE.RingGeometry(BOARD.RING_R - 0.21, BOARD.RING_R + 0.21, seg(64, 40))), paperMat(p.ring, 1));
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = -0.055;
     ring.receiveShadow = true;
@@ -560,7 +594,7 @@
 
     // decorative pop-up city inside the ring (deterministic, seeded decor)
     var decor = root.CFRNG.derive(cfg.seed, root.CFRNG.STREAM_DECOR);
-    var count = rich ? 16 : 8;
+    var count = S.g.budget.decor; // per-preset budget (pop-up props inside the ring)
     var treeCol = mixColor(0x5d8c4a, p.fog, 0.2);
     for (var k = 0; k < count; k++) {
       var a = decor.next() * Math.PI * 2;
@@ -585,7 +619,7 @@
 
     // drifting paper flecks above the table (background: animated)
     if (S.g && S.g.background === 'animated') {
-      var mcount = 70, mp = new Float32Array(mcount * 3);
+      var mcount = S.g.budget.motes, mp = new Float32Array(mcount * 3); // per-preset budget
       for (var q = 0; q < mcount; q++) {
         var ma = decor.next() * Math.PI * 2, mr = 0.3 + decor.next() * 2.4;
         mp[q * 3] = Math.cos(ma) * mr; mp[q * 3 + 1] = 0.15 + decor.next() * 1.1; mp[q * 3 + 2] = Math.sin(ma) * mr;
@@ -605,7 +639,7 @@
     S.tokens.rival = cfg.rival ? makeToken(p.tokenRival) : null;
 
     // selection marker (grounded ring, lifted tile is applied separately)
-    var mk = new THREE.Mesh(geom(new THREE.RingGeometry(0.16, 0.21, rich ? 40 : 24)),
+    var mk = new THREE.Mesh(geom(new THREE.RingGeometry(0.16, 0.21, seg(rich ? 40 : 24))),
       new THREE.MeshBasicMaterial({ color: p.accent, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
     mk.rotation.x = -Math.PI / 2;
     mk.visible = false;
@@ -645,21 +679,24 @@
     var g = new THREE.Group();
     if (detailed()) {
       // lacquered wooden pawn: smooth cone body, ball head, clear-coat shine
-      var lacquer = new THREE.MeshPhysicalMaterial({
-        color: color, roughness: 0.4, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.18, envMapIntensity: 1
-      });
-      var body = new THREE.Mesh(geom(new THREE.ConeGeometry(FRAMING.TOKEN_R, FRAMING.TOKEN_H * 0.92, 28)), lacquer);
+      // Clear-coat lacquer on High/Ultra; Standard lacquer on Balanced; card on Low (preset budget).
+      var kind = S.g.budget.material;
+      var lacquer = kind === 'physical'
+        ? new THREE.MeshPhysicalMaterial({ color: color, roughness: 0.4, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.18, envMapIntensity: 1 })
+        : kind === 'standard' ? new THREE.MeshStandardMaterial({ color: color, roughness: 0.32, metalness: 0, envMapIntensity: 1 })
+          : paperMat(color, 0.55);
+      var body = new THREE.Mesh(geom(new THREE.ConeGeometry(FRAMING.TOKEN_R, FRAMING.TOKEN_H * 0.92, seg(28))), lacquer);
       body.position.y = FRAMING.TOKEN_H * 0.46;
       g.add(body);
-      var head = new THREE.Mesh(geom(new THREE.SphereGeometry(FRAMING.TOKEN_R * 0.55, 20, 14)), lacquer);
+      var head = new THREE.Mesh(geom(new THREE.SphereGeometry(FRAMING.TOKEN_R * 0.55, seg(20), seg(14))), lacquer);
       head.position.y = FRAMING.TOKEN_H * 0.9;
       g.add(head);
     } else {
-      var cone = new THREE.Mesh(geom(new THREE.ConeGeometry(FRAMING.TOKEN_R, FRAMING.TOKEN_H, 12)), paperMat(color, 0.55));
+      var cone = new THREE.Mesh(geom(new THREE.ConeGeometry(FRAMING.TOKEN_R, FRAMING.TOKEN_H, seg(12))), paperMat(color, 0.55));
       cone.position.y = FRAMING.TOKEN_H / 2;
       g.add(cone);
     }
-    var ringM = new THREE.Mesh(geom(new THREE.TorusGeometry(FRAMING.TOKEN_R * 1.15, 0.02, 8, 20)), paperMat(0xffffff, 0.7));
+    var ringM = new THREE.Mesh(geom(new THREE.TorusGeometry(FRAMING.TOKEN_R * 1.15, 0.02, seg(8), seg(20))), paperMat(0xffffff, 0.7));
     ringM.rotation.x = Math.PI / 2;
     ringM.position.y = 0.02;
     g.add(ringM);
@@ -771,7 +808,7 @@
     var THREE = T();
     var q = S.g ? S.g.particleScale : 1;
     var many = q >= 1;
-    var count = Math.round((power || 1) * (many ? 14 : 10) * q);
+    var count = Math.round((power || 1) * (S.g ? S.g.budget.confetti : 14)); // per-preset budget (tier-capped)
     if (count <= 0) return;
     var pos = Game.tilePos(S.cfg, tileIdx);
     // high: mixed confetti colours (event colour, theme accent, white paper)
@@ -950,7 +987,7 @@
     S.last = now;
     var rescale = adapt(dt);
     var w = S.size[0], h = S.size[1];
-    var ratio = Math.min(root.devicePixelRatio || 1, S.g.cap) * S.g.scale * S.adaptiveScale;
+    var ratio = Math.min(root.devicePixelRatio || 1, S.g.cap) * S.g.scale * (S.g.presetScale || 1) * S.adaptiveScale;
     if (S.sizeDirty || rescale || ratio !== S.pixelRatio) {
       S.sizeDirty = false;
       S.pixelRatio = ratio;
@@ -967,10 +1004,25 @@
 
   function isAvailable() { return S.ok; }
 
+  // One paced unit of cosmetic animation + drawing. When the frame limiter skips this display refresh (e.g.
+  // phones' half-refresh Auto), the animation step is skipped too and the next drawn frame advances by the
+  // real elapsed time, so motion is unchanged and skipped refreshes cost nothing.
+  function frame(dt) {
+    var now = (root.performance && performance.now()) || 0;
+    var step = function () {
+      var elapsed = S.lastStep ? Math.min(0.1, (now - S.lastStep) / 1000) : dt;
+      S.lastStep = now;
+      update(elapsed);
+      render();
+      return true;
+    };
+    if (globalThis.GameOptions) globalThis.GameOptions.draw(S.renderer, step); else step();
+  }
+
   root.CFRender = {
     init: init, dispose: dispose, isAvailable: isAvailable,
     buildBoard: buildBoard, clearOwnershipMarks: clearOwnershipMarks,
-    syncState: syncState, update: update, settle: settle, render: render,
+    syncState: syncState, update: update, settle: settle, render: render, frame: frame,
     setViewport: setViewport, setGraphics: setGraphics, graphicsInfo: graphicsInfo,
     setReducedMotion: setReducedMotion,
     setPaletteHC: setPaletteHC,

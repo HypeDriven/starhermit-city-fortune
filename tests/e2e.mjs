@@ -173,6 +173,7 @@ async function runPass(pass, contextOpts, opts = {}) {
       p = await preset();
       if (p[0] !== 'high' || p[1] !== 'high') throw new Error(`high preset not applied: ${p}`);
       if (!/bloom/.test(await summary())) throw new Error('high summary should list bloom');
+      if (!/ · Level 0 · /.test(await summary())) throw new Error(`summary lacks the hardware level: ${await summary()}`);
       const opt0 = await page.textContent('#set-gfx-bloom option[value="preset"]');
       if (!/\(On\)/.test(opt0)) throw new Error(`bloom "From preset" label wrong: ${opt0}`);
       await page.locator('#set-gfx-bloom').scrollIntoViewIfNeeded();
