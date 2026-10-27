@@ -1,0 +1,125 @@
+/* City Fortune — the browser build's css/style.css rewritten class-based
+   for the engine's UI (`npm run css` converts it into assets/ui-style.json).
+   Element selectors, ids, attribute selectors and @media do not convert:
+   every widget names its classes and the breakpoints are layouts picked in
+   native/screens.ts. Dashed borders are not drawn by the engine: the list
+   separators are solid hairlines. High contrast, larger text and reduced
+   motion are the runtime's (it forces the UI's colours and scales its text). */
+
+:root {
+  --bg: #f2e4c8;
+  --panel: #fff8ea;
+  --ink: #3a2f22;
+  --accent: #e07f3e;
+  --accent-ink: #ffffff;
+  --muted: #7a6a52;
+  --line: #d9c49a;
+  --focus: #2e6fe4;
+  --danger: #b85450;
+  --done: #2e7d32;
+  --soft: #fff3d6;
+}
+
+* { box-sizing: border-box; }
+
+.body { color: var(--ink); font-size: 16px; }
+.muted { color: var(--muted); font-size: 14.4px; }
+.small { color: var(--muted); font-size: 13px; }
+.tagline { color: var(--muted); font-size: 16px; }
+.h1 { color: var(--ink); font-size: 30.4px; font-weight: 700; letter-spacing: 0.6px; }
+.h1-small { color: var(--ink); font-size: 24px; font-weight: 700; }
+.h2 { color: var(--ink); font-size: 17.6px; font-weight: 700; }
+.h3 { color: var(--ink); font-size: 15.2px; font-weight: 700; }
+
+/* ------------------------------------------------------------- panels */
+.panel {
+  background: url("../assets/paper-grain.webp") 0 0 / 256px 256px, var(--panel);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 20px 24px;
+  box-shadow: 0 6px 24px #3c2d142e;
+}
+.panel-tight { padding: 14px 16px; }
+.rail {
+  background: url("../assets/paper-grain.webp") 0 0 / 256px 256px, var(--panel);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px;
+}
+.status-row {
+  background: url("../assets/paper-grain.webp") 0 0 / 256px 256px, var(--panel);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 6px 12px;
+}
+.status-item { color: var(--ink); font-weight: 600; font-size: 15.2px; }
+.lesson-card {
+  background: var(--panel); border: 2px solid var(--accent); border-radius: 10px;
+  padding: 10px 16px; box-shadow: 0 8px 28px #3c2d144d;
+}
+.art-frame { border-bottom: 3px solid var(--accent); border-radius: 10px 10px 0 0; }
+
+/* ------------------------------------------------------------- buttons */
+.btn {
+  padding: 9px 16px; border-radius: 10px;
+  border: 1px solid var(--line); background: #ffffff; color: var(--ink);
+  min-height: 44px; min-width: 44px; font-size: 16px; text-align: center;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: 0.45; }
+.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { border-color: var(--ink); }
+.btn-big { font-size: 18.4px; padding: 12px 28px; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.list-btn {
+  padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: #ffffff; color: var(--ink);
+  min-height: 40px; font-size: 15.2px; text-align: left;
+}
+.list-btn:hover { border-color: var(--accent); }
+.list-btn:disabled { opacity: 0.45; }
+.list-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tag { font-size: 11.5px; background: var(--accent); color: var(--accent-ink); border-radius: 4px; padding: 1px 6px; }
+.stars { color: var(--accent); font-size: 15.2px; }
+
+/* ------------------------------------------------------------- game */
+.page { color: var(--ink); font-size: 14.7px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.page-done { color: var(--done); font-weight: 600; font-size: 14.7px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.page-done-hc { color: #0077b6; font-weight: 600; font-size: 14.7px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.log-item { color: var(--ink); font-size: 13.6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.log-warn { color: var(--danger); font-size: 13.6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.selection-desc { color: var(--muted); font-size: 14.4px; }
+.mirror {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px;
+}
+.mirror-tile {
+  padding: 5px 8px; border-radius: 10px; border: 1px solid #00000000; background: #00000000; color: var(--ink);
+  min-height: 36px; font-size: 13.6px; text-align: left;
+}
+.mirror-tile:hover { border-color: var(--line); }
+.mirror-tile.active { border-color: var(--accent); background: var(--soft); font-weight: 600; }
+.mirror-tile:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.mirror-here { color: var(--accent); font-weight: 700; }
+.drawer-close { min-width: 44px; min-height: 44px; padding: 4px; border-radius: 10px; border: 1px solid var(--line); background: #ffffff; color: var(--ink); }
+
+/* ------------------------------------------------------------- dialogs */
+.dt { color: var(--ink); font-weight: 700; font-size: 16px; }
+.dd { color: var(--ink); font-size: 16px; }
+.breakdown-row { border-bottom: 1px solid var(--line); padding: 4px 12px; }
+.breakdown-total { border-top: 2px solid var(--ink); padding: 4px 12px; }
+.bd-label { color: var(--ink); font-size: 16px; }
+.bd-value { color: var(--ink); font-size: 16px; }
+.bd-strong { color: var(--ink); font-size: 16px; font-weight: 800; }
+.ach-chip { background: var(--soft); border: 1px solid var(--accent); border-radius: 6px; padding: 4px 10px; color: var(--ink); font-size: 15px; }
+.ach { padding: 6px 0; border-bottom: 1px solid var(--line); opacity: 0.6; }
+.ach-got { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rule-card { background: #ffffff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.rule-title { color: var(--ink); font-size: 15.2px; font-weight: 700; }
+.rule-text { color: var(--ink); font-size: 14px; }
+.fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.legend { color: var(--ink); font-weight: 700; font-size: 16px; }
+.field-label { color: var(--ink); font-size: 16px; }
+
+/* ------------------------------------------------------------- toasts */
+.toast {
+  padding: 10px 16px; border-radius: 10px; text-align: center;
+  background: #fffaf0; color: #2b2622; border: 1px solid #2b262240; box-shadow: 0 6px 18px #00000033;
+}
+.captions { background: #000000bf; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-size: 14.4px; }

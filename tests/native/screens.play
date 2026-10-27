@@ -1,0 +1,82 @@
+# The title's dialogs (Settings with a game setting toggled, Help,
+# Achievements, Leaderboards), the mode select, a lesson played to its goal
+# (Roll and move: one roll), the board list, the Album and News drawers,
+# pause → Help → back to pause → Leave round, and back to the title.
+until 300 City Fortune
+frames 20
+save title
+click Settings
+until 60 Accessibility & controls
+frames 10
+click Always show board list
+frames 5
+save settings
+click Done
+frames 10
+click Help
+until 60 How to play
+frames 10
+save help
+key Escape 1
+frames 10
+click Achievements
+until 60 Master Curator
+frames 10
+key Escape 1
+frames 10
+click Leaderboards
+until 60 No results yet
+frames 10
+click Close
+frames 10
+click Play
+until 60 Choose a mode
+frames 10
+click Roll and move
+until 120 This is your city circuit
+frames 30
+expect Album
+save lesson
+frames 5
+click Roll
+frames 3
+key KeyC 1
+frames 10
+until 120 Lesson complete!
+save lesson-done
+click Got it
+frames 10
+click Album
+until 60 Close album
+frames 10
+save album-drawer
+click Close album
+frames 10
+click News
+until 60 Close news
+frames 10
+expect Welcome to
+click Close news
+frames 10
+key KeyP 1
+until 60 Paused
+frames 10
+save pause
+click Help
+until 60 How to play
+frames 10
+expect Right now
+click Close
+until 60 Leave round
+frames 10
+click Leave round
+until 120 Daily challenge available
+frames 10
+click Settings
+until 60 Always show board list
+frames 10
+click Always show board list
+frames 5
+click Done
+frames 10
+expect Journey: 0 / 40 stages

@@ -1,9 +1,24 @@
 name=City Fortune
 description=Roll around a miniature city, buy districts, build houses, and collect rent while completing board objectives.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.15.2
+engine.minor=17
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# The board is also played with the pointer or touch: tap a tile to select
+# it (then Build), and the tray's buttons.
 control.prev=ArrowLeft+ArrowUp | Select previous tile
 control.next=ArrowRight+ArrowDown | Select next tile
 control.confirm=Enter+Space | Roll / buy / build
@@ -14,4 +29,20 @@ control.hint=KeyH | Hint
 control.settle=KeyC | Skip animations
 control.pause=KeyP | Pause
 control.cancel=Escape | Pause / close panel
-control.mute=KeyM | Mute / unmute
+engine.group.prev=Board
+engine.group.undo=Assists
+engine.group.pause=Game
+
+# Gamepad defaults: the D-pad or left stick moves the selection, A rolls /
+# buys / builds, X buys, B skips the offer (and closes panels), Y hints,
+# Select undoes, the right shoulder skips animations, Start pauses.
+engine.gamepad.prev=DpadLeft+DpadUp+LeftStickLeft+LeftStickUp
+engine.gamepad.next=DpadRight+DpadDown+LeftStickRight+LeftStickDown
+engine.gamepad.confirm=South
+engine.gamepad.buy=West
+engine.gamepad.skip=LeftShoulder
+engine.gamepad.undo=Select
+engine.gamepad.hint=North
+engine.gamepad.settle=RightShoulder
+engine.gamepad.pause=Start
+engine.gamepad.cancel=East

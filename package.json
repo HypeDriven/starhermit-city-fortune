@@ -1,13 +1,17 @@
 {
   "name": "city-fortune",
   "version": "1.0.0",
-  "description": "City Fortune — asynchronous social board game in a pop-up paper city.",
+  "description": "City Fortune — asynchronous social board game in a pop-up paper city, on the StarHermit engine.",
   "private": true,
   "scripts": {
-    "start": "node server.js",
-    "test": "node tests/run-tests.js && node --test tests/platform.test.mjs tests/i18n.test.mjs",
-    "test:e2e": "node tests/e2e.mjs",
-    "validate": "node tools/validate.js"
+    "test": "npm run test:unit && npm run test:native",
+    "test:unit": "node tests/run-tests.js && node --test tests/save.test.mjs tests/i18n.test.mjs && node tools/validate.js",
+    "test:native": "node tests/native.mjs",
+    "test:browser": "node tools/browser-play.mjs .",
+    "package": "node tools/package-web.mjs",
+    "css": "node tools/css.mjs",
+    "plays": "node tools/gen-play.mjs",
+    "start": "node server.js"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1"

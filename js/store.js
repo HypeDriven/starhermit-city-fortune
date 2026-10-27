@@ -146,8 +146,56 @@
     });
   }
 
+  // ---------- the engine client (native/platform.ts) ----------
+  // The engine save is { v: 1, progress } — this document without its
+  // settings (the runtime's Options and the game's own settings below now)
+  // and without the checksum envelope (the engine keeps the save whole).
+  function docFromSave(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    if (data.v > SAVE_VERSION) return null;
+    var d = migrate(JSON.parse(JSON.stringify(data)));
+    return d ? { v: SAVE_VERSION, progress: d.progress } : null;
+  }
+
+  var bool = function (v) { return typeof v === 'boolean'; };
+  var THEME_IDS = ['paper', 'canal', 'blossom', 'midnight', 'harvest'];
+  /** The game's own settings (game.<key> in the runtime's settings) with their checks. */
+  var GAME_SETTINGS = {
+    theme: function (v) { return THEME_IDS.indexOf(v) >= 0; },
+    colorPalette: function (v) { return v === 'standard' || v === 'high-visibility'; },
+    captions: bool, leftHanded: bool, haptics: bool, boardMirror: bool, confirmMoves: bool
+  };
+  var GAME_SETTING_KEYS = Object.keys(GAME_SETTINGS);
+  /** What the browser build mirrored to the account's settings (its SYNCED_SETTINGS). */
+  var BROWSER_SETTING_KEYS = ['music', 'effects', 'ambience', 'voice', 'muted', 'captions', 'graphicsTier', 'gfx', 'theme',
+    'reducedMotion', 'highContrast', 'colorPalette', 'largeText', 'leftHanded', 'haptics', 'boardMirror', 'confirmMoves'];
+  /** A valid value for one of the game's settings, else undefined. */
+  function checkSetting(key, v) {
+    var ok = GAME_SETTINGS[key];
+    return ok && ok(v) ? v : undefined;
+  }
+  /** The game's settings among a browser-build settings object. */
+  function gameSettingsFrom(s) {
+    var out = {};
+    if (!s || typeof s !== 'object') return out;
+    GAME_SETTING_KEYS.forEach(function (k) { if (checkSetting(k, s[k]) !== undefined) out[k] = s[k]; });
+    return out;
+  }
+  /** The browser build's cloud save (save.json: the wrapped {sum, payload} text): its doc and game settings. */
+  function fromBrowserSave(text) {
+    var d = typeof text === 'string' ? loadRaw(text) : null;
+    if (!d) return { doc: null, settings: null };
+    return { doc: { v: SAVE_VERSION, progress: d.progress }, settings: gameSettingsFrom(d.settings) };
+  }
+
   return {
     SAVE_VERSION: SAVE_VERSION,
+    docFromSave: docFromSave,
+    fromBrowserSave: fromBrowserSave,
+    GAME_SETTING_KEYS: GAME_SETTING_KEYS,
+    BROWSER_SETTING_KEYS: BROWSER_SETTING_KEYS,
+    checkSetting: checkSetting,
+    defaultProgress: defaultProgress,
     mergeProgress: mergeProgress,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     load: load, loadRaw: loadRaw, save: save, fresh: fresh, migrate: migrate,
