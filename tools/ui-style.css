@@ -123,3 +123,10 @@
   background: #fffaf0; color: #2b2622; border: 1px solid #2b262240; box-shadow: 0 6px 18px #00000033;
 }
 .captions { background: #000000bf; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-size: 14.4px; }
+
+/* text inside the bordered list rows (the row carries the border) */
+.log-text { color: var(--ink); font-size: 13.6px; }
+.warn-text { color: var(--danger); font-size: 13.6px; }
+.page-text { color: var(--ink); font-size: 14.7px; }
+.page-done-text { color: var(--done); font-weight: 600; font-size: 14.7px; }
+.page-done-hc-text { color: #0077b6; font-weight: 600; font-size: 14.7px; }

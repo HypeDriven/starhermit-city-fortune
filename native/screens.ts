@@ -321,8 +321,8 @@ function albumRail(w: number): void {
     const cls = prog.done ? (settings.colorPalette === "high-visibility" ? "page-done-hc" : "page-done") : "page";
     ui.row(`page-${pg.id}`, () => {
       if (prog.done) glyph("check", 13, settings.colorPalette === "high-visibility" ? "#0077b6" : "#2e7d32", tr("unlocked"));
-      para(text, w - (prog.done ? 20 : 0), cls);
-    }, { spacing: 6, align: "center", width: w });
+      para(text, w - (prog.done ? 20 : 0), cls + "-text");
+    }, { spacing: 6, align: "center", width: w, style: cls });
   }
   if (s.rival) {
     const nProps = Object.keys(s.rival.props).length;
@@ -335,7 +335,7 @@ function newsRail(w: number, h: number): void {
   logLen = log.length;
   ui.scrollArea("event-log", { width: w + 10, height: Math.max(60, h) }, () => {
     ui.column("event-log-col", () => {
-      log.forEach((l, i) => ui.column(`log-${i}`, () => para(l.text(), w - 4, l.warn ? "log-warn" : "log-item"), { width: w - 4, style: l.warn ? "log-warn" : "log-item" }));
+      log.forEach((l, i) => ui.column(`log-${i}`, () => para(l.text(), w - 4, l.warn ? "warn-text" : "log-text"), { width: w - 4, style: l.warn ? "log-warn" : "log-item" }));
     }, { width: w, spacing: 0 });
   }, scroll ? { scrollTo: { top: Infinity } } : undefined);
 }

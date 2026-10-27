@@ -11,7 +11,7 @@ frames 10
 click Always show board list
 frames 5
 save settings
-click Done
+key Escape 1
 frames 10
 click Help
 until 60 How to play
@@ -66,7 +66,7 @@ click Help
 until 60 How to play
 frames 10
 expect Right now
-click Close
+key Escape 1
 until 60 Leave round
 frames 10
 click Leave round
@@ -77,6 +77,6 @@ until 60 Always show board list
 frames 10
 click Always show board list
 frames 5
-click Done
+key Escape 1
 frames 10
 expect Journey: 0 / 40 stages

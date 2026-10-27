@@ -713,6 +713,38 @@
         "color": "#ffffff",
         "size": 14.4
       }
+    },
+    ".log-text": {
+      "text": {
+        "color": "$ink",
+        "size": 13.6
+      }
+    },
+    ".warn-text": {
+      "text": {
+        "color": "$danger",
+        "size": 13.6
+      }
+    },
+    ".page-text": {
+      "text": {
+        "color": "$ink",
+        "size": 14.7
+      }
+    },
+    ".page-done-text": {
+      "text": {
+        "color": "$done",
+        "size": 14.7,
+        "weight": "600"
+      }
+    },
+    ".page-done-hc-text": {
+      "text": {
+        "color": "#0077b6",
+        "size": 14.7,
+        "weight": "600"
+      }
     }
   },
   "animations": {},
