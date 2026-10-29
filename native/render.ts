@@ -13,9 +13,10 @@
 // framed into the playfield the HUD leaves (setViewOffset), as the browser
 // build's canvas sat between its rails.
 //
-// Gaps from three.js: lights take three.js intensities ÷ π; flat shading is
-// non-indexed geometry with computed normals; envMapIntensity is not read
-// (scene.environmentIntensity sets the room's strength); the post chain is
+// Lights, the fitted shadow box and the room environment are the page's own
+// (three.js r160 parity at engine minor 28; r160 scaled scene.environment by
+// each material's envMapIntensity, so each standard material takes the room
+// as its own envMap); flat shading is non-indexed geometry; the post chain is
 // renderer.ao / bloom / grade / antialias.
 import {
   ACESFilmicToneMapping, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, ConeGeometry, CylinderGeometry,
@@ -35,8 +36,8 @@ const FRAMING = {
   PROP_W: 0.24, PROP_D: 0.30, PROP_H: 0.16, BUILD_STEP: 0.14,
   TOKEN_R: 0.085, TOKEN_H: 0.24,
 };
-/** The RoomEnvironment's strength (three.js read envMapIntensity 0.15 on paper, 1 on pawns). */
-const ENV_INTENSITY = 0.35;
+/** Paper's envMapIntensity at detailed quality (js/render.js makePaperMat); others take three's default 1. */
+const envI = new WeakMap<Material, number>();
 
 const camera = new PerspectiveCamera(FRAMING.FOV, 16 / 9, 0.1, 60);
 renderer.toneMapping = ACESFilmicToneMapping;
@@ -120,6 +121,7 @@ function paperMat(color: number, rough = 0.9): Material {
     m = look && look.budget.material === "lambert"
       ? new MeshLambertMaterial({ color, map })
       : new MeshStandardMaterial({ color, roughness: rough, metalness: 0.02, map });
+    if (map) envI.set(m, 0.15);
     paperCache.set(key, m);
   }
   return m;
@@ -217,12 +219,14 @@ function districtColor(d: string | undefined): number {
 }
 
 // ---------------------------------------------------------------- lights
-const key = new DirectionalLight(0xffe0b0, 1.6 / PI);
+const key = new DirectionalLight(0xffe0b0, 1.6);
 key.position.set(1.6, 3.2, 1.2);
 key.target.position.set(0, 0, 0);
-key.shadow.distance = 6.5;
+// shadow frustum fitted to the board disc (radius 2) seen from the key
+Object.assign(key.shadow.camera, { left: -2.1, right: 2.1, top: 2.1, bottom: -2.1, near: 1.5, far: 6.5 });
+key.shadow.camera.updateProjectionMatrix();
 key.shadow.bias = -0.0004;
-key.shadow.normalBias = 1;
+key.shadow.normalBias = 0.012;
 scene.add(key, key.target);
 
 // ---------------------------------------------------------------- the board
@@ -262,16 +266,15 @@ export function buildBoard(c: Cfg, t: Theme): void {
   renderer.shadowMap.enabled = shadows;
   key.castShadow = shadows;
   if (shadows) key.shadow.mapSize = look.shadows;
-  hemi = new HemisphereLight(p.sky, p.ground, (look.reflections ? 0.7 : 0.85) / PI);
+  hemi = new HemisphereLight(p.sky, p.ground, look.reflections ? 0.7 : 0.85);
   scene.add(hemi);
   if (look.reflections) {
     if (!envTex) {
-      try { envTex = new PMREMGenerator().fromScene(new RoomEnvironment(), 0.04).texture; }
+      try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture; }
       catch (e) { console.warn("environment:", e instanceof Error ? e.message : String(e)); }
     }
-    scene.environment = envTex;
-    scene.environmentIntensity = ENV_INTENSITY;
-  } else scene.environment = null;
+  }
+  scene.environment = null;
 
   // window cut-outs: warm lamps; they glow (and bloom) on night themes
   if (rich) {
@@ -387,8 +390,23 @@ export function buildBoard(c: Cfg, t: Theme): void {
   marker.visible = false;
   g.add(marker);
 
+  applyEnv(g);
   if (lastState && lastState.cfg.id === c.id) syncState(lastState, null, true);
   setSelection(selection);
+}
+
+/** Each standard material gets the room as its own envMap at its envMapIntensity (as r160 drew it). */
+function applyEnv(g: Group): void {
+  const env = look?.reflections ? envTex : null;
+  g.traverse((o) => {
+    const m = (o as Mesh).material as Material | Material[] | undefined;
+    if (!m) return;
+    for (const mat of Array.isArray(m) ? m : [m]) {
+      if (!(mat instanceof MeshStandardMaterial)) continue;
+      mat.envMap = env;
+      mat.envMapIntensity = envI.get(mat) ?? 1;
+    }
+  });
 }
 
 function makeToken(color: number): Token {
@@ -565,6 +583,7 @@ export function setPlayfield(x: number, y: number, w: number, h: number, W: numb
   const next = { x, y, w: Math.max(1, w), h: Math.max(1, h), W: Math.max(1, W), H: Math.max(1, H) };
   if (Object.entries(next).every(([k, v]) => Math.abs(v - (view as Record<string, number>)[k]!) < 0.5)) return;
   view = next;
+  camera.aspect = view.w / view.h; // the browser build's canvas was the playfield
   camera.setViewOffset(view.w, view.h, -view.x, -view.y, view.W, view.H);
   camera.updateProjectionMatrix();
 }
