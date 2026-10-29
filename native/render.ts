@@ -609,11 +609,13 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
   };
   // High threshold: only emissive windows, the selection glow and bright highlights bloom.
-  renderer.bloom = next.bloom ? { strength: 0.42, radius: 0.35, threshold: 1.0, resolution: next.budget.bloomRes } : null;
-  // The browser build's grade pass: a gentle S-curve (0.18), saturation 1.1,
-  // cool shadows / warm highlights, the 0.2 vignette.
+  // The page's three r160 UnrealBloomPass strength squared: minor 29 bloom follows r185 (≈2.9× the light).
+  renderer.bloom = next.bloom ? { strength: 0.18, radius: 0.35, threshold: 1.0, resolution: next.budget.bloomRes } : null;
+  // The browser build's grade pass, a ShaderPass before OutputPass (linear light):
+  // S-curve 0.18, saturation 1.1, cool shadows / warm highlights, over-range light
+  // kept (mix(c, s + max(c - 1, 0), amount)), the 0.2 vignette.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.09, saturation: 1.1,
+    space: "linear", overRange: "keep", contrast: 0.18, saturation: 1.1,
     shadows: [0.97, 0.99, 1.04], highlights: [1.03, 1.0, 0.96], split: [0.1, 0.6],
     vignette: { amount: 0.2, inner: 0.38, outer: 0.85 },
   } : null;
