@@ -11,7 +11,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | Genre | Solo roll-and-move board game with a deterministic rival and album (set-collection) goals |
 | Players | 1 human; an optional scripted rival ("Penny", "Brick", "Moss", "Vela", "Cobalt") shares the circuit on alternating turns |
 | Session | 3–9 minutes per round (par times 240–560 s); a Learn lesson is under a minute |
-| Platforms | The StarHermit engine 1.22.0 (host API 1.21): natively in the StarHermit client, and in desktop and mobile browsers (portrait and landscape) through the engine's web runtime |
+| Platforms | The StarHermit engine 1.23.0 (host API 1.21): natively in the StarHermit client, and in desktop and mobile browsers (portrait and landscape) through the engine's web runtime |
 | Rendering | `starhermit:scene` (the three.js model) perspective scene of a circular paper board, its look per the runtime's graphics level; all UI is `starhermit:ui` (immediate mode) beside/over the playfield; a board list of tile buttons carries the same information as the 3D scene |
 | Hosting | One engine package (`starhermit.txt`, entry `native/main.ts`); browsers open the loader `index.html` that `npm run package` writes; on StarHermit the platform script is `score-script.js` (leaderboard posting); `server.js` (Node 18+, no dependencies) is a local dev server that verifies scores by replaying them (tests only) |
 
@@ -19,8 +19,8 @@ Present tense: this document describes what the shipped game does today. Anythin
 
 | Path | Owns |
 |---|---|
-| `starhermit.txt` | Manifest: name, description, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.22.0`, `engine.minor=17`, `engine.capabilities=platform,storage,clipboard`, ten `control.*` actions with `engine.gamepad.*` defaults and groups |
-| `index.html`, `starhermit-files.json` | The engine's web loader (pins 1.22.0 on wiki.starhermit.com by hash) and the package's file index, written by `npm run package`; never edited by hand |
+| `starhermit.txt` | Manifest: name, description, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.23.0`, `engine.minor=17`, `engine.capabilities=platform,storage,clipboard`, ten `control.*` actions with `engine.gamepad.*` defaults and groups |
+| `index.html`, `starhermit-files.json` | The engine's web loader (pins 1.23.0 on wiki.starhermit.com by hash) and the package's file index, written by `npm run package`; never edited by hand |
 | `native/main.ts` | Entry: navigation, command pipeline, event presentation on fixed steps, selection, round clock and time limits, lessons, results and achievements, input, lifecycle |
 | `native/screens.ts` | Every screen, the round's HUD and every dialog in `starhermit:ui`; the layouts (wide / compact / phone portrait / short landscape); drawn glyphs instead of symbol fonts |
 | `native/render.ts` | The paper city on `starhermit:scene`: board, tiles, pop-up decor, pawns, owner buildings, selection and build rings, confetti, the camera framed into the playfield (`setViewOffset`), picking |
