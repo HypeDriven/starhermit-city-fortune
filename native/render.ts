@@ -612,10 +612,10 @@ export function applyLook(next: Look): void {
   // r160 page: its UnrealBloomPass(0.42, 0.35, 1.0) exactly (model "r160", strength as written).
   renderer.bloom = next.bloom ? { model: "r160", strength: 0.42, radius: 0.35, threshold: 1.0, resolution: next.budget.bloomRes } : null;
   // The browser build's grade pass, a ShaderPass before OutputPass (linear light):
-  // S-curve 0.18, saturation 1.1, cool shadows / warm highlights, over-range light
+  // S-curve 0.18, Rec. 709 luma, saturation 1.1, cool shadows / warm highlights, over-range light
   // kept (mix(c, s + max(c - 1, 0), amount)), the 0.2 vignette.
   renderer.grade = next.grade ? {
-    space: "linear", contrastCurve: "s", overRange: "keep", contrast: 0.18, saturation: 1.1,
+    space: "linear", contrastCurve: "s", luma: "709", overRange: "keep", contrast: 0.18, saturation: 1.1,
     shadows: [0.97, 0.99, 1.04], highlights: [1.03, 1.0, 0.96], split: [0.1, 0.6],
     vignette: { amount: 0.2, inner: 0.38, outer: 0.85 },
   } : null;
