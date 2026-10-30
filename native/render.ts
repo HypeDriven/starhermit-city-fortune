@@ -270,7 +270,7 @@ export function buildBoard(c: Cfg, t: Theme): void {
   scene.add(hemi);
   if (look.reflections) {
     if (!envTex) {
-      try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture; }
+      try { const envRoom = new RoomEnvironment(renderer); envRoom.position.y = 0; /* the page's three (pre-r183) builds the room at the origin */ envTex = new PMREMGenerator(renderer).fromScene(envRoom, 0.04).texture; }
       catch (e) { console.warn("environment:", e instanceof Error ? e.message : String(e)); }
     }
   }
