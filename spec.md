@@ -24,7 +24,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `native/main.ts` | Entry: navigation, command pipeline, event presentation on fixed steps, selection, round clock and time limits, lessons, results and achievements, input, lifecycle |
 | `native/screens.ts` | Every screen, the round's HUD and every dialog in `starhermit:ui`; the layouts (wide / compact / phone portrait / short landscape); drawn glyphs instead of symbol fonts |
 | `native/render.ts` | The paper city on `starhermit:scene`: board, tiles, pop-up decor, pawns, owner buildings, selection and build rings, confetti, the camera framed into the playfield (`setViewOffset`), picking |
-| `native/quality.ts` | The old presets' looks and budgets keyed by the runtime's quality tier and level |
+| `native/quality.ts` | The look per graphics level: engine effects from `levelSettings()`, the old presets' art and budgets by quality tier |
 | `native/audio.ts` | Authored clips per event (`sfx/manifest.json`), captions, rendered ambience and pad |
 | `native/platform.ts` | Save (`saves`, foreign-save migration, conflict merge), the game's settings (`settings`, legacy import), invite link, leaderboard read and posting, platform clock |
 | `native/i18n.ts`, `native/style.ts`, `native/classic.ts` | Locale from the runtime's language; the UI styles (`assets/ui-style.json` from `tools/ui-style.css`); the classic-script loader with a `localStorage` shim over device storage |
@@ -207,14 +207,14 @@ The layout works in the window's safe area; text sizes and the interface scale f
 
 **Motion.** Token hops ease in-out over 0.45 s with up to four sine hops; buildings pop in with a cubic ease over 0.35 s; confetti planes (4 per power at Confetti *Low*, 14 in mixed event/accent/white colours at *High*) fall under gravity for 0.7 s; page/win events add a 0.012/0.02 camera nudge decaying at 0.04/s from an authored base pose (never cumulative). The selection ring pulses gently; with Ambient motion *Animated*, waiting tokens bob by under 1 cm and ~70 paper flecks drift slowly above the table. Reduced motion (the runtime's preference) freezes the ambient pulse, bob and drift, shortens event beats to 60 ms, makes token moves and pops instant, removes camera shake and clamps particle updates.
 
-**Graphics.** A warm key directional light (the browser build's three.js r160 intensities, its shadow box fitted to the board disc) casting shadows on the higher levels, a hemisphere fill, and on Balanced and above image-based lighting (`PMREMGenerator.fromScene(new RoomEnvironment(renderer))` as each standard material's own envMap at its old envMapIntensity: paper 0.15, pawns and windows 1). Window cut-outs are emissive lamps, dim on day themes and glowing on night themes; the selection ring is HDR-bright when bloom is on. Post-processing is the runtime's: `renderer.ao` (GTAO), `renderer.bloom` (strength 0.42, radius 0.35, threshold 1.0), `renderer.grade` (gentle S-curve, +10 % saturation, cool shadows / warm highlights, vignette 0.2) and `renderer.antialias`. The look follows the runtime's graphics level (Options › Graphics): its quality tier picks the old preset (`native/quality.ts`), and the level within the tier scales the flecks and confetti (≤ 4×). Auto, render scale, adaptive resolution, the frame-rate limit and readout, shadow-map size and MSAA samples are the runtime's.
+**Graphics.** A warm key directional light (the browser build's three.js r160 intensities, its shadow box fitted to the board disc) casting shadows on the higher levels, a hemisphere fill, and on Balanced and above image-based lighting (`PMREMGenerator.fromScene(new RoomEnvironment(renderer))` as each standard material's own envMap at its old envMapIntensity: paper 0.15, pawns and windows 1). Window cut-outs are emissive lamps, dim on day themes and glowing on night themes; the selection ring is HDR-bright when bloom is on. Post-processing is the runtime's: `renderer.ao` (GTAO), `renderer.bloom` (strength 0.42, radius 0.35, threshold 1.0), `renderer.grade` (gentle S-curve, +10 % saturation, cool shadows / warm highlights, vignette 0.2) and `renderer.antialias`. The look follows the runtime's graphics level (Options › Graphics): the engine-owned effects (shadows and their map size, AO resolution and samples, bloom resolution, the grade, anti-aliasing) are the level's own (`levelSettings()`), the game's art below is keyed by the level's quality tier (`native/quality.ts`), and the flecks and confetti scale with the level's particle budget against the tier's anchor level (≤ 4×). Auto, render scale, adaptive resolution, the frame-rate limit and readout are the runtime's. At the tiers' anchor levels:
 
-| Tier | Shadows | AO | Bloom / grade | AA | IBL | Scene detail | Ambient motion |
+| Tier (anchor) | Shadows | AO | Bloom / grade | AA | IBL | Scene detail | Ambient motion |
 |---|---|---|---|---|---|---|---|
-| Low | off | off | off | MSAA | off | plain | still |
-| Balanced | 1024 | off | on | FXAA | on | detailed | animated |
-| High | 2048 | on | on | SMAA | on | detailed | animated |
-| Ultra | 4096 | high | on | MSAA | on | detailed | animated |
+| Low (quantum) | off | off | off | none | off | plain | still |
+| Balanced (molecular) | 1024 | off | ½-res bloom / on | FXAA | on | detailed | animated |
+| High (terrestrial) | 2048 | ½-res, 8 samples | ½-res bloom / on | SMAA | on | detailed | animated |
+| Ultra (galactic) | 4096 | full, 16 samples | full bloom / on | MSAA 4 | on | detailed | animated |
 
 | Budget | Low | Balanced | High | Ultra |
 |---|---|---|---|---|
@@ -225,7 +225,6 @@ The layout works in the window's safe area; text sizes and the interface scale f
 | Pop-up props inside the ring | 4 | 12 | 16 | 22 |
 | Drifting flecks | 24 | 40 | 70 | 120 |
 | Confetti per burst | 6 | 10 | 14 | 20 |
-| Bloom / GTAO resolution | ½ / ½ | ½ / ½ | ½ / ½ | full / full |
 
 A level change rebuilds the board from the current state. Flat-shaded card is non-indexed geometry; each house's windows are one instanced draw; paper materials are shared per colour within a board.
 

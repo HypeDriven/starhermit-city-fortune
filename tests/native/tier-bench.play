@@ -1,0 +1,21 @@
+# Graphics-tier bench (tools/engine-tier-bench.mjs): the Standard practice board
+# with the rival Penny (fixed setup, the same opening as practice-rival.play),
+# settled, then the first turn measured with its animations: the roll and hop,
+# the purchase, the rival's turn.
+until 300 City Fortune
+frames 20
+click Play
+until 60 Choose a mode
+frames 10
+click Standard
+until 60 Expected duration
+frames 10
+click Start
+until 120 Your turn
+frames 120
+measure start
+click Roll
+frames 300
+key KeyB 1
+frames 300
+measure stop

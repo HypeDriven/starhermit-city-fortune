@@ -265,7 +265,7 @@ export function buildBoard(c: Cfg, t: Theme): void {
   const shadows = look.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   key.castShadow = shadows;
-  if (shadows) key.shadow.mapSize = look.shadows;
+  if (shadows) key.shadow.mapSize = look.shadows; // the level's size: from minor 23 the runtime keeps a light's mapSize
   hemi = new HemisphereLight(p.sky, p.ground, look.reflections ? 0.7 : 0.85);
   scene.add(hemi);
   if (look.reflections) {
@@ -384,7 +384,7 @@ export function buildBoard(c: Cfg, t: Theme): void {
 
   // selection marker (grounded ring); it glows (and blooms) when bloom is on
   const mc = new Color(p.accent);
-  if (look.bloom) mc.multiplyScalar(2.2);
+  if (look.bloom !== null) mc.multiplyScalar(2.2);
   marker = new Mesh(new RingGeometry(0.16, 0.21, seg(rich ? 40 : 24)), new MeshBasicMaterial({ color: mc, transparent: true, opacity: 0.9, side: DoubleSide }));
   marker.rotation.x = -PI / 2;
   marker.visible = false;
@@ -603,14 +603,16 @@ export function applyLook(next: Look): void {
   if (look && JSON.stringify(look) === JSON.stringify(next)) return;
   if (look && look.budget.grain !== next.budget.grain && grain) { grain.dispose(); grain = null; }
   look = next;
-  renderer.ao = next.ao === "off" ? null : {
+  // The level's AO (engine AoQuality: resolution < 1 is "on", 1 is "high"); the radius and phis are the game's.
+  const ao = next.ao, full = !!ao && ao.resolution >= 1;
+  renderer.ao = ao && {
     blendIntensity: 0.85, radius: 0.22, distanceExponent: 1.4, thickness: 0.6, scale: 1.0,
-    samples: next.ao === "high" ? 16 : 8, resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
+    samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: full ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // High threshold: only emissive windows, the selection glow and bright highlights bloom.
   // r160 page: its UnrealBloomPass(0.42, 0.35, 1.0) exactly (model "r160", strength as written).
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.42, radius: 0.35, threshold: 1.0, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { model: "r160", strength: 0.42, radius: 0.35, threshold: 1.0, resolution: next.bloom };
   // The browser build's grade pass, a ShaderPass before OutputPass (linear light):
   // S-curve 0.18, Rec. 709 luma, saturation 1.1, cool shadows / warm highlights, over-range light
   // kept (mix(c, s + max(c - 1, 0), amount)), the 0.2 vignette.
