@@ -65,8 +65,15 @@ function button(b: Btn, width: number | null = null): void {
   }
   if (ui.style(...style, s).id(b.id).button(b.text, opts)) b.act();
 }
-/** Buttons at their own widths in rows that wrap at `width` (CSS flex-wrap). */
-function flow(label: string, list: Btn[], width: number, align: "start" | "center" | "end" = "center", gap = 8, reverse = false): void {
+/** Buttons at their own widths in an engine row that wraps at `width` (CSS flex-wrap). */
+function flow(label: string, list: Btn[], width: number, gap = 8): void {
+  ui.row(label, () => {
+    for (const b of list) button(b, b.width ?? (buttonWidth(b.text, b.style ?? PLAIN) > width ? width : null));
+  }, { wrap: true, width, gap, justify: "center", align: "center" });
+}
+/** The left-handed tray: lines packed here and mirrored one by one, so Roll stays first on the
+ * top line's thumb side (an engine row only reverses whole, which moves Roll to the last line). */
+function mirroredFlow(label: string, list: Btn[], width: number, gap = 8): void {
   const rows: Btn[][] = [[]];
   let used = 0;
   for (const b of list) {
@@ -77,9 +84,9 @@ function flow(label: string, list: Btn[], width: number, align: "start" | "cente
   }
   ui.column(label, () => {
     rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => {
-      for (const b of reverse ? [...row].reverse() : row) button(b, b.width ?? (buttonWidth(b.text, b.style ?? PLAIN) > width ? width : null));
+      for (const b of [...row].reverse()) button(b, b.width ?? (buttonWidth(b.text, b.style ?? PLAIN) > width ? width : null));
     }, { spacing: gap, align: "center" }));
-  }, { spacing: gap, align, width });
+  }, { spacing: gap, align: "center", width });
 }
 /** Text up to `width` wide: one label when it fits, else a paragraph. */
 function para(text: string, width: number, cls: string | null = "body", id?: string, center = false): void {
@@ -402,7 +409,8 @@ function tray(L: Layout, w: number): void {
         for (const b of settings.leftHanded ? [...row].reverse() : row) button({ ...b, width: bw }, bw);
       }, { spacing: gap }));
     }, { spacing: gap, width: w });
-  } else flow("tray", list, w, "center", 8, settings.leftHanded);
+  } else if (settings.leftHanded) mirroredFlow("tray", list, w);
+  else flow("tray", list, w);
 }
 function mirrorText(i: number): string {
   const s = sess!.state;
