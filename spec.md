@@ -25,6 +25,8 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `native/screens.ts` | Every screen, the round's HUD and every dialog in `starhermit:ui`; the layouts (wide / compact / phone portrait / short landscape); drawn glyphs instead of symbol fonts |
 | `native/render.ts` | The paper city on `starhermit:scene`: board, tiles, pop-up decor, pawns, owner buildings, selection and build rings, confetti, the camera framed into the playfield (`setViewOffset`), picking |
 | `native/quality.ts` | The look per graphics level: engine effects from `levelSettings()`, the old presets' art and budgets by quality tier |
+
+Low (quantum) keeps MSAA instead of the level's "off" until engine 1.36.2: engine 1.36.1 recolours fog, haze and translucent overlays without anti-aliasing.
 | `native/audio.ts` | Authored clips per event (`sfx/manifest.json`), captions, rendered ambience and pad |
 | `native/platform.ts` | Save (`saves`, foreign-save migration, conflict merge), the game's settings (`settings`, legacy import), invite link, leaderboard read and posting, platform clock |
 | `native/i18n.ts`, `native/style.ts`, `native/classic.ts` | Locale from the runtime's language; the UI styles (`assets/ui-style.json` from `tools/ui-style.css`); the classic-script loader with a `localStorage` shim over device storage |
