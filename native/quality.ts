@@ -82,9 +82,7 @@ export function lookFor(s: LevelSettings = levelSettings()): Look {
     ao: s.ao && { resolution: s.ao.resolution, samples: s.ao.samples, denoiseSamples: s.ao.denoiseSamples },
     bloom: s.bloom ? s.bloom.resolution : null,
     grade: s.grade,
-    // Engine issue (1.36.1, reported 2026-11-04; fix due in 1.36.2): antialias "off" recolours fog,
-    // haze and translucent overlays, so Low keeps the MSAA it always had until that release.
-    antialias: s.antialias === "off" ? "msaa" : s.antialias,
+    antialias: s.antialias,
     budget: {
       ...b,
       grain: Math.min(b.grain, s.maxTextureSize),
