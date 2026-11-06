@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { loadTables, codeKeys, audit, bootI18n } from './i18n-common.mjs';
+import { codeKeys, audit } from './i18n-common.mjs';
 
 const require = createRequire(import.meta.url);
 const ROOT = new URL('../', import.meta.url);
@@ -36,23 +36,9 @@ export function usedKeys() {
   const audio = read('native/audio.ts');
   const caps = audio.slice(audio.indexOf('const CAPTIONS'), audio.indexOf('};', audio.indexOf('const CAPTIONS')));
   for (const m of caps.matchAll(/:\s*"([^"]+)"/g)) keys.add(m[1]);
-  return [...keys].filter((k) => /[A-Za-z]/.test(k)).sort();
+  return [...keys].filter((k) => /[A-Za-z]/.test(k) && !k.startsWith('starhermit.')).sort();
 }
 
 test('every used key is translated in every locale; placeholders and markup intact', () => {
-  assert.deepEqual(audit(loadTables(ROOT, 'js/strings.js', 'CF_STRINGS'), usedKeys()), []);
-});
-
-test('the locale switches as the engine client sets it, with the regional tables', () => {
-  const { I18N } = bootI18n(ROOT, { strings: 'js/strings.js', i18n: 'js/i18n.js', global: 'CFI18N' });
-  assert.equal(I18N.lang, 'en-US');
-  assert.equal(I18N.setLocale('de-DE'), 'de-DE');
-  assert.equal(I18N.T('Roll'), 'Würfeln');
-  I18N.setLocale('en-GB');
-  assert.equal(I18N.T('Color palette'), 'Colour palette');
-  assert.equal(I18N.T('Roll'), 'Roll');
-  I18N.setLocale('es-ES');
-  assert.equal(I18N.T('Sticker book'), 'Álbum de pegatinas');
-  assert.equal(I18N.setLocale('xx-YY'), 'en-US');
-  assert.equal(I18N.T('{n} pts', { n: 3 }), '3 pts');
+  assert.deepEqual(audit(JSON.parse(read('assets/strings.json')), usedKeys()), []);
 });

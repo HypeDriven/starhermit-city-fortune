@@ -24,6 +24,7 @@ import {
   MeshPhysicalMaterial, MeshStandardMaterial, Object3D, PMREMGenerator, PerspectiveCamera, PlaneGeometry, Points, PointsMaterial,
   Raycaster, RepeatWrapping, RingGeometry, RoomEnvironment, SRGBColorSpace, SphereGeometry, TorusGeometry, Vector3, pointerToNdc,
   renderer, scene, type Material, type Texture,
+  tween, stopTweens,
 } from "starhermit:scene";
 import { OffscreenCanvas } from "starhermit:canvas";
 import { Content, Game, RNG, type Cfg, type Ev, type State, type Theme } from "./classic.ts";
@@ -63,8 +64,7 @@ let windowMat: Material | null = null;
 let hemi: HemisphereLight | null = null;
 interface Token { group: Group; tile: number; from: number; to: number; t: number; phase: number }
 const tokens: { you: Token | null; rival: Token | null } = { you: null, rival: null };
-interface Anim { dur: number; t: number; update: (t01: number) => void }
-let anims: Anim[] = [];
+let growing: Object3D[] = [];
 interface Particle { mesh: Mesh; mat: MeshBasicMaterial; t: number; dur: number; vx: number; vy: number; vz: number }
 let particles: Particle[] = [];
 let camShake = 0;
@@ -243,7 +243,7 @@ function disposeBoard(): void {
   if (windowMat) windowMat.dispose();
   if (hemi) scene.remove(hemi);
   board = null; tileTops = []; marker = null; highlights = []; motes = null; windowMat = null; hemi = null;
-  tokens.you = tokens.rival = null; anims = []; particles = []; owned.clear(); highlightKey = "";
+  tokens.you = tokens.rival = null; growing = []; particles = []; owned.clear(); highlightKey = "";
 }
 
 /** Builds the round's board in a theme (js/render.js buildBoard). */
@@ -470,7 +470,8 @@ function applyOwnership(state: State, idx: number, who: "you" | "rival", instant
   owned.set(k, b);
   if (!instant) {
     b.scale.set(0.01, 0.01, 0.01);
-    anims.push({ dur: 0.35, t: 0, update: (t) => { const e = Math.max(0.01, 1 - Math.pow(1 - t, 3)); b.scale.set(e, e, e); } });
+    tween(b, { scale: 1 }, { duration: 0.35, easing: "easeOutCubic" });
+    growing.push(b);
   }
 }
 /** Removes every owner's building (an undo rebuilds them from the state). */
@@ -533,8 +534,8 @@ function burst(tileIdx: number, color: number, power = 1): void {
 /** Fast-forward: every animation in its end state. */
 export function settle(): void {
   for (const who of ["you", "rival"] as const) { const tk = tokens[who]; if (tk) { tk.t = 1; placeToken(tk, who); } }
-  for (const an of anims) an.update(1);
-  anims = [];
+  for (const b of growing) { stopTweens(b); b.scale.set(1, 1, 1); }
+  growing = [];
   for (const p of particles) { board?.remove(p.mesh); p.mat.dispose(); }
   particles = [];
   camShake = 0;
@@ -665,13 +666,6 @@ export function update(dtIn: number): void {
   if (motes && moving) {
     motes.rotation.y = time * 0.025;
     motes.position.y = Math.sin(time * 0.4) * 0.04;
-  }
-  for (let i = anims.length - 1; i >= 0; i--) {
-    const an = anims[i]!;
-    an.t += dt;
-    const t01 = Math.min(1, an.t / an.dur);
-    an.update(t01);
-    if (t01 >= 1) anims.splice(i, 1);
   }
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i]!;

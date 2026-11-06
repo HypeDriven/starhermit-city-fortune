@@ -33,7 +33,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | `js/content.js` | Versioned content: districts, themes, 40 journey stages, 6 challenges, 3 practice presets, daily generator, 5 Learn lessons, 10 achievements |
 | `js/store.js` | Save document (checksum, migration, `docFromSave`, `fromBrowserSave`, `mergeProgress`), the game settings' checks, local leaderboard and tie-break sort |
 | `js/game.js` | Session wrapper: command log, undo stack, replay envelope and verification, shared board geometry (`tilePos`) |
-| `js/i18n.js`, `js/strings.js`, `js/platform-strings.js` | `CFI18N` (`T()`, `setLocale`) and the nine-locale tables keyed by the English source strings; the platform lines' tables |
+| `assets/strings.json` | The nine-locale tables keyed by the English source strings (the engine's `strings`; account lines are its `starhermit.*` keys) |
 | `score-script.js` | StarHermit platform script (`server=`): range-checks a finished round's total and posts it to the `high-score` leaderboard |
 | `server.js` | Local dev server (static host, `/api/v1/time`, `/daily`, `/score`, `/leaderboard`, replay verification); left out of the package |
 | `tests/` | `run-tests.js` (rules, content, store, server), `save.test.mjs` (engine save and migration), `i18n.test.mjs`, `native.mjs` (tsc, `starhermit check`, the play scripts in `tests/native/`, web index) |
@@ -232,7 +232,7 @@ A level change rebuilds the board from the current state. Flat-shaded card is no
 
 ## 9. Audio direction
 
-**Mix.** The runtime's buses (Options › Audio owns volumes, mute and the voice limit): music, effects (effects and ambience), interface (the click). The old bus levels (music 0.6, effects 0.9, ambience 0.5) are folded into each sound's gain. Ambience is a quiet brown-noise city hum (low-pass 300 Hz, gain 0.32) and music a slow generative pad walking C–Am–F–G an octave down every 5.2 s; both are rendered once into clips (`createClip`) and play from the title on. Effects are the authored Opus clips (`sfx/<name>.opus`) mapped by `sfx/manifest.json`, loaded one at a time once the mixer runs (in a browser after the first press); an event whose clip has not loaded yet is silent (the browser build's synthesized stand-ins are not ported). Captions (Settings → "Captions for sounds") show a note line for 2.5 s.
+**Mix.** The runtime's buses (Options › Audio owns volumes, mute and the voice limit): music, effects (effects and ambience), interface (the click). The old bus levels (music 0.6, effects 0.9, ambience 0.5) are folded into each sound's gain. Ambience is a quiet brown-noise city hum (low-pass 300 Hz, gain 0.32) and music a slow generative pad walking C–Am–F–G an octave down every 5.2 s; both are rendered once offline into clips and play from the title on. Effects are the authored Opus clips (`sfx/<name>.opus`) mapped by `sfx/manifest.json`, loaded one at a time once the mixer runs (in a browser after the first press); an event whose clip has not loaded yet is silent (the browser build's synthesized stand-ins are not ported). Captions (Settings → "Captions for sounds") show a note line for 2.5 s.
 
 **SFX event table** (source of `sfx/manifest.txt`):
 
@@ -270,7 +270,7 @@ Event priority when several fire in one command: they play in event order with 3
 
 Nine locales ship: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**; `<html lang>` is set to the resolved tag.
 
-- **Strings.** English source strings are the keys; `js/strings.js` holds the tables (es-419, de-DE, fr-FR, pt-BR, it-IT in full; en-GB derived with British spelling — colour, harbour; es-ES and fr-CA list only their differences, e.g. es-ES *pegatina*, fr-CA *pointage*). Every string the client draws goes through `tr()` each frame: HUD, tray, news log, setup dialog, hints, invalid-action messages, selection and board-list labels, results, help, achievements, leaderboards, friends, toasts, announcements and captions. Content data stays English and is translated at display time (stage, challenge and practice names, briefings, lessons, districts, album pages, chance cards, themes, achievements). "City Fortune", "StarHermit" and the rival names stay as they are.
+- **Strings.** English source strings are the keys; `assets/strings.json` holds the tables (es-419, de-DE, fr-FR, pt-BR, it-IT in full; en-GB derived with British spelling — colour, harbour; es-ES and fr-CA list only their differences, e.g. es-ES *pegatina*, fr-CA *pointage*). Every string the client draws goes through `tr()` each frame: HUD, tray, news log, setup dialog, hints, invalid-action messages, selection and board-list labels, results, help, achievements, leaderboards, friends, toasts, announcements and captions. Content data stays English and is translated at display time (stage, challenge and practice names, briefings, lessons, districts, album pages, chance cards, themes, achievements). "City Fortune", "StarHermit" and the rival names stay as they are.
 - **Language.** The runtime's interface language (Options › Language: the player's choice, else the account's preferred language or the device's) picks the nearest shipped locale (es-MX → es-419, en-AU → en-GB, fr → fr-FR); a change shows at once, the round untouched. The game's own language menu is gone.
 - **Expansion.** Labels too wide for their space wrap into paragraphs; tray and button rows wrap.
 
@@ -297,16 +297,16 @@ The runtime provides the platform (`starhermit:platform`, `starhermit:storage`);
 | Controls | Ten actions with keyboard and gamepad defaults; rebinding is the runtime's |
 | Invite link | Signed in, Invite a friend copies `inviteLink()` with a toast |
 | Server time | `serverTime()` at start; the daily's UTC date and session ids use `serverNow()`, else the device clock |
-| Leaderboard posting | Signed in, every finished round except lessons posts its total through `score-script.js` (a practice session carrying `{ type: 'result', scores: { 'high-score': n } }`); the results show "Leaderboard rank: #N" (or posted / not posted) |
+| Leaderboard posting | Signed in, every finished round except lessons posts its total through `score-script.js` (`leaderboards.submitScore`); the results show "Leaderboard rank: #N" (or posted / not posted) |
 | Leaderboards UI | The platform `high-score` board's top 20 (names from profiles, own row marked) when it can be read (guests too, once its id is known on the device), above the local top 20 |
 | Reports, language, graphics, audio, accessibility | The runtime's Options (F1) |
 | Platform achievements, presence, chat, voice | Not used: achievements stay in the save; the Friends panel lists recent local sessions |
 
-Platform strings (sign in, invite, toasts, leaderboard line) ship in all nine locales (`js/platform-strings.js`, following the game language).
+Platform strings (sign in, invite, toasts, leaderboard line) ship in all nine locales (the engine's `starhermit.*` strings, following the game language).
 
 ## 13. Technical architecture
 
-- **Module graph**: `native/main.ts` imports `classic.ts` first, which installs the `localStorage` shim and loads `rng → rules → content → store → game → strings → i18n → platform-strings` as classic scripts (`loadClassic`); the same UMD files run in `server.js`, the tests and the validator.
+- **Module graph**: `native/main.ts` imports `classic.ts` first, which installs the engine's `localStorage` and loads `rng → rules → content → store → game` as classic scripts (`loadClassic`); the same UMD files run in `server.js`, the tests and the validator.
 - **Determinism**: rules never read the clock; time arrives as `atMs` and is quantised to 100 ms. The round clock and the presentation beats count fixed steps, so pauses, a hidden window and slow frames cost no time and play scripts replay exactly. Cosmetic randomness uses `Math.random` and never touches state.
 - **Session/undo/replay**: `Game.createSession` keeps `initialState`, an undo stack, `invalidCount` and the replay envelope.
 - **Persistence**: the engine save (§12); local boards under `cityfortune.leaderboards.v1` in device storage (last 200).

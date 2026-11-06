@@ -5,25 +5,14 @@
 // scripts so their globals are this module's exports.
 //
 // js/store.js keeps the device's local leaderboard in `localStorage`: here
-// that is a small shim over the device's starhermit:storage, installed
+// that is the engine's, over the device's starhermit:storage, installed
 // before the scripts run. Progress itself is the game's save (platform.ts).
-import { storage } from "starhermit:storage";
+import { installLocalStorage } from "starhermit:storage";
 import { loadClassic } from "starhermit:script";
 
-const shim = {
-  getItem(key: string): string | null {
-    try { return storage.getText(key); } catch { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { storage.set(key, String(value)); } catch (e) { console.warn(`storage ${key}: ${String(e)}`); }
-  },
-  removeItem(key: string): void {
-    try { storage.remove(key); } catch { /* gone */ }
-  },
-};
-(globalThis as unknown as { localStorage: typeof shim }).localStorage = shim;
+installLocalStorage();
 
-for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/store.js", "js/game.js", "js/strings.js", "js/i18n.js", "js/platform-strings.js"]) loadClassic(f);
+for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/store.js", "js/game.js"]) loadClassic(f);
 
 // -- The shapes this client reads -------------------------------------------------
 export type TileKind = "start" | "prop" | "bonus" | "toll" | "card" | "sticker" | "park";
@@ -100,24 +89,12 @@ interface StoreApi {
   sortEntries(e: BoardEntry[]): BoardEntry[];
 }
 interface RngApi { derive(seed: number, stream: number): { next(): number; int(n: number): number }; STREAM_DECOR: number }
-interface I18nApi {
-  T(key: string, vars?: Record<string, string | number> | null): string;
-  setLocale(tag: string): string;
-  readonly lang: string;
-  locales: string[];
-}
-interface PlatformStringsApi {
-  platformStrings(lang: string): Record<string, string>;
-  fmtPlatform(s: string, vars?: Record<string, string | number>): string;
-}
 
 const g = globalThis as unknown as {
-  CFRules: RulesApi; CFGame: GameApi; CFContent: ContentApi; CFStore: StoreApi; CFRNG: RngApi; CFI18N: I18nApi; PlatformStrings: PlatformStringsApi;
+  CFRules: RulesApi; CFGame: GameApi; CFContent: ContentApi; CFStore: StoreApi; CFRNG: RngApi;
 };
 export const Rules = g.CFRules;
 export const Game = g.CFGame;
 export const Content = g.CFContent;
 export const Store = g.CFStore;
 export const RNG = g.CFRNG;
-export const I18n = g.CFI18N;
-export const PlatformStrings = g.PlatformStrings;

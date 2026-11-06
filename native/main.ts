@@ -30,7 +30,7 @@ import {
   type Achievement, type BoardEntry, type Cfg, type Cmd, type Ev, type Lesson, type Page, type Session, type State, type Theme, type Tile,
 } from "./classic.ts";
 import * as audio from "./audio.ts";
-import { tr, N, pt, onLocaleChange } from "./i18n.ts";
+import { tr, N, onLocaleChange } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import { lookFor } from "./quality.ts";
 import * as render from "./render.ts";
@@ -40,7 +40,6 @@ import { initStyles } from "./style.ts";
 export type ScreenName = "title" | "modes" | "game" | "results";
 export type OverlayName = "setup" | "pause" | "settings" | "help" | "achievements" | "boards" | "friends" | "album" | "news";
 export type Mode = "journey" | "challenge" | "practice" | "daily" | "learn";
-export interface Toast { text: () => string; until: number }
 export interface LogLine { text: () => string; warn: boolean }
 
 const STEP_MS = 1000 / 60;
@@ -53,10 +52,9 @@ export const app = {
   focusNext: null as string | null,
   setupCfg: null as Cfg | null,
   setupMode: "journey" as Mode,
-  toast: null as Toast | null,
   caption: null as { text: string; until: number } | null,
   results: null as { s: State; entry: BoardEntry; unlocked: string[] } | null,
-  lb: null as { state: "lbPosting" | "lbRank" | "lbPosted" | "lbNotPosted"; rank?: number | null } | null,
+  lb: null as { state: "leaderboardPosting" | "leaderboardRank" | "leaderboardPosted" | "leaderboardNotPosted"; rank?: number | null } | null,
   boardRows: null as { name: string; score: string }[] | null,
   boardNote: "",
   signedOut: false,
@@ -120,11 +118,18 @@ export function describeRules(cfg: Cfg): string {
 export function announce(text: string, kind: "status" | "error" = "status"): void {
   if (text) ui.announce(text.slice(0, 500), { politeness: kind === "error" ? "assertive" : "polite" });
 }
-/** A toast (3.5 s); `text` re-reads in the current language. */
-export function toast(text: () => string): void {
-  app.toast = { text, until: now() + 3.5 };
-  announce(text());
+/** A toast (3.5 s), one at a time: over a round it stands clear of the hand and the tray. */
+let shownToast: ui.Toast | null = null;
+export function toast(text: string): void {
+  shownToast?.dismiss();
+  const v = ui.viewport!();
+  const shortLand = v.width > v.height && v.height <= 480;
+  const phone = !shortLand && v.width <= 720 && v.height >= v.width;
+  const offset = app.screen === "game" ? (phone ? 214 : 114) : 4; // the old distance from the edge − the stack's 16
+  shownToast = ui.toast!(text, { duration: 3.5, style: "toast", dismissible: false, offset });
 }
+/** Whether a toast is up (the caption strip stands above it). */
+export function toastUp(): boolean { return !!shownToast?.queued; }
 function haptic(): void { if (settings.haptics) vibrate(12); }
 export function progress(): ReturnType<typeof platform.getDoc>["progress"] { return platform.getDoc().progress; }
 export function totalStars(): number { let n = 0; for (const v of Object.values(progress().journeyStars)) n += v; return n; }
@@ -567,11 +572,11 @@ export function retry(): void { if (app.setupCfg) startGame(app.setupCfg, app.se
 function postToLeaderboard(total: number): void {
   app.lb = null;
   if (!platform.signedIn()) return;
-  const line = { state: "lbPosting" as const };
+  const line = { state: "leaderboardPosting" as const };
   app.lb = line;
   void platform.postLeaderboard(total).then((r) => {
     if (app.lb !== line) return;
-    app.lb = { state: !r.posted ? "lbNotPosted" : r.rank ? "lbRank" : "lbPosted", rank: r.rank };
+    app.lb = { state: !r.posted ? "leaderboardNotPosted" : r.rank ? "leaderboardRank" : "leaderboardPosted", rank: r.rank };
   });
 }
 
@@ -616,7 +621,7 @@ export async function copyInvite(): Promise<void> {
   const link = platform.inviteLink();
   let ok = false;
   if (link) { try { clipboard.writeText(link); ok = true; } catch { ok = false; } }
-  toast(() => (ok ? pt("inviteCopied") : pt("inviteFailed")));
+  toast(tr(ok ? "starhermit.inviteCopied" : "starhermit.inviteFailed"));
 }
 export function signIn(): void { void requestSignIn().catch(() => undefined); }
 
@@ -712,7 +717,7 @@ onStart(() => {
 onPreferencesChange((p) => render.setReducedMotion(p.reducedMotion));
 platform.onSettingsChange(() => render.setPaletteHC(settings.colorPalette === "high-visibility"));
 onLocaleChange(() => { if (topOverlay() === "boards") refreshBoard(); });
-onSessionEnded(() => { app.signedOut = true; toast(() => pt("signedOut")); });
+onSessionEnded(() => { app.signedOut = true; toast(tr("starhermit.signedOut")); });
 onPlayerChange((p) => { if (p) app.signedOut = false; });
 onSuspend(() => { suspended = true; platform.flush(); });
 onResume(() => { suspended = false; });
@@ -733,7 +738,6 @@ onUpdate((dt) => {
   applyLook();
   audio.update();
   const t0 = now();
-  if (app.toast && app.toast.until < t0) app.toast = null;
   if (app.caption && t0 > app.caption.until) app.caption = null;
 });
 onRender(() => {

@@ -18,7 +18,7 @@ import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
 import { TextureLoader, type Texture } from "starhermit:scene";
 import { Content as C, Game as G, Rules as R, Store as S } from "./classic.ts";
-import { tr, N, pt } from "./i18n.ts";
+import { tr, N } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import * as render from "./render.ts";
 import {
@@ -26,21 +26,19 @@ import {
   describeRules, describeSelection, doHint, doUndo, elapsedMs, fmtCoins, fmtTime, leaveRound, lesson, lessonCompleted, log,
   nextJourney, openDaily, openOverlay, openSetup, pageName, pauseGame, presenting, progress, resumeGame, retry, roll, selectTile,
   selectedTile, sess, settings, signIn, skip, startFromSetup, startGame, startLesson, tileKindLabel, tileLabel, toModes, toTitle,
-  today, topOverlay, totalStars,
+  today, topOverlay, totalStars, toastUp,
 } from "./main.ts";
 import { PAPER } from "./style.ts";
 
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; ox: number; oy: number; wide: boolean; compact: boolean; phone: boolean; shortLand: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
+  const v = ui.viewport!();
+  const sc = v.scale, lw = Math.max(1, v.width), lh = Math.max(1, v.height);
   const shortLand = lw > lh && lh <= 480;
   const wide = !shortLand && lw >= 1024;
   const phone = !shortLand && lw <= 720 && lh >= lw;
-  return { lw, lh, sc, ox: sa.left / sc, oy: sa.top / sc, wide, compact: !wide && !phone && !shortLand, phone, shortLand };
+  return { lw, lh, sc, ox: v.x, oy: v.y, wide, compact: !wide && !phone && !shortLand, phone, shortLand };
 }
 const lastHeight = new Map<string, number>();
 
@@ -207,7 +205,7 @@ export function drawScreens(): void {
     case "results": resultsScreen(L); break;
   }
   overlays(L);
-  toasts(L, playing);
+  captionStrip(L, playing);
   if (app.focusNext) {
     const age = f.frame - app.openedFrame;
     if (age >= 1) ui.setFocus(app.focusNext);
@@ -251,15 +249,15 @@ function titleScreen(L: Layout): void {
     para(done ? tr("Daily done — score {score}", { score: done }) : tr("Daily challenge available"), w, "muted", "title-daily", true);
     para(tr("Journey: {done} / {total} stages · {stars} stars", { done: Object.keys(p.journeyStars).length, total: C.JOURNEY.length, stars: totalStars() }), w, "muted", "title-progress", true);
     para(platform.signedIn() ? tr("Playing as {name} — connected to the platform.", { name: platform.displayName() }) : tr("Offline — progress is stored on this device."), w, "muted", "account-line", true);
-    if (app.signedOut && !platform.signedIn()) para(pt("signedOut"), w, "small", "signed-out", true);
+    if (app.signedOut && !platform.signedIn()) para(tr("starhermit.signedOut"), w, "small", "signed-out", true);
     const nav: Btn[] = [
       { id: "btn-title-boards", text: tr("Leaderboards"), act: () => openOverlay("boards") },
       { id: "btn-title-achievements", text: tr("Achievements"), act: () => openOverlay("achievements") },
       { id: "btn-title-settings", text: tr("Settings"), act: () => openOverlay("settings") },
       { id: "btn-title-help", text: tr("Help"), act: () => openOverlay("help") },
     ];
-    if (platform.inviteLink()) nav.push({ id: "btn-title-invite", text: pt("invite"), act: () => void copyInvite() });
-    if (!platform.signedIn()) nav.push({ id: "btn-title-signin", text: pt("signIn"), style: ["btn", "btn-primary"], act: signIn });
+    if (platform.inviteLink()) nav.push({ id: "btn-title-invite", text: tr("starhermit.invite"), act: () => void copyInvite() });
+    if (!platform.signedIn()) nav.push({ id: "btn-title-signin", text: tr("starhermit.signIn"), style: ["btn", "btn-primary"], act: signIn });
     flow("title-nav", nav, w);
   }, true, keyArt && L.lh > 420 ? (pw) => {
     const ah = Math.min(L.lh * (L.lh <= 600 ? 0.24 : L.lw <= 560 ? 0.26 : 0.38), 300, pw * 9 / 16);
@@ -542,7 +540,7 @@ function resultsScreen(L: Layout): void {
     }
     const next = nextJourney();
     para(next ? tr("Next: {name}", { name: tr(next.name) }) : won ? tr("Well played.") : tr("Try a different approach — undo and hints are available in practice."), w, "muted", "results-progress", true);
-    if (app.lb) para(app.lb.state === "lbRank" ? pt("lbRank", { rank: app.lb.rank ?? "" }) : pt(app.lb.state), w, "muted", "results-server", true);
+    if (app.lb) para(tr(`starhermit.${app.lb.state}`, app.lb.state === "leaderboardRank" ? { rank: app.lb.rank ?? "" } : null), w, "muted", "results-server", true);
     const btns: Btn[] = [];
     if (next) btns.push({ id: "btn-results-next", text: tr("Next: {name}", { name: tr(next.name) }), style: ["btn", "btn-primary"], act: () => startGame(next, "journey") });
     btns.push({ id: "btn-results-retry", text: tr("Retry"), act: retry });
@@ -756,20 +754,13 @@ function friendsDialog(L: Layout): void {
   });
 }
 
-// ------------------------------------------------------------------ toast and captions
-function toasts(L: Layout, playing: boolean): void {
+// ------------------------------------------------------------------ captions
+function captionStrip(L: Layout, playing: boolean): void {
   const bottom = playing ? (L.phone ? 230 : 130) : 20;
   if (app.caption) {
     const text = tr(app.caption.text);
-    ui.place("captions", { anchor: "bottom", y: bottom + (app.toast ? 56 : 0) + 4 }, () => {
+    ui.place("captions", { anchor: "bottom", y: bottom + (toastUp() ? 56 : 0) + 4 }, () => {
       ui.row("caption-row", () => { glyph("note", 12, "#ffffff"); ui.style({ text: { color: "#ffffff", size: 14.4 } }).id("caption-text").label(text); }, { spacing: 4, align: "center" });
     }, { style: "captions" });
   }
-  if (!app.toast) return;
-  const text = app.toast.text();
-  const w = Math.min(L.lw - 32, 512);
-  ui.place("toast", { anchor: "bottom", y: bottom }, () => {
-    if (textWidth(text, "toast") + 40 <= w) ui.style("toast").id("toast").label(text);
-    else ui.style("toast").id("toast").paragraph(text, w - 34);
-  }, { width: w, align: "center" });
 }
