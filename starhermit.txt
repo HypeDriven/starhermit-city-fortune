@@ -46,3 +46,7 @@ engine.gamepad.hint=North
 engine.gamepad.settle=RightShoulder
 engine.gamepad.pause=Start
 engine.gamepad.cancel=East
+
+# Game language (saved per player); Automatic follows the account/device.
+control.localization=F2 | Language
+engine.group.localization=Interface
