@@ -1,3 +1,4 @@
+import { bindings } from "starhermit:input";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 // localization-runtime:attached
 import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
@@ -209,7 +210,7 @@ function art(id: string, tex: Texture | null, w: number, h: number, fy: number):
 }
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   loadArt();
   const L = layoutNow();
   const f = frame();
@@ -780,4 +781,11 @@ function captionStrip(L: Layout, playing: boolean): void {
       ui.row("caption-row", () => { glyph("note", 12, "#ffffff"); ui.style(__l10nStyle({ text: { color: "#ffffff", size: 14.4 } })).id("caption-text").label(text); }, { spacing: 4, align: "center" });
     }, { style: "captions" });
   }
+}
+
+export function drawScreens(): void {
+  if (!(topOverlay() === "help")) { drawScreensImmediate(); return; }
+  const actions = ["prev","next","confirm","buy","skip","undo","hint","settle","pause","cancel"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
