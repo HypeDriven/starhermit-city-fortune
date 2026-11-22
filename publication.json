@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:00:59.033906+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-18T16:45:09.233999+00:00",
+    "coverArtUpdatedAt": "2026-11-22T14:17:49.878291+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-18T16:45:09.222147+00:00",
+      "deployedAt": "2026-11-22T14:17:49.865299+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.44.1",
+      "engineVersion": "1.47.0",
       "deployWarning": null
     },
     "description": "Roll around a miniature city, buy districts, build houses, and collect rent while completing board objectives.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-18T16:45:09.155Z",
-  "sourceCommit": "6eaa5692ad4405c9993f39329eae32c386a2eeee",
-  "bytesReceived": 2904954,
-  "archiveSha256": "cd5bd5c540c19462f111a94267083accc563c8b762f03c06e48267faea32c871",
+  "publishedAt": "2026-11-22T14:17:50.301Z",
+  "sourceCommit": "c6a9c9334d614529402ee2ea69398e269a8de18f",
+  "bytesReceived": 2905417,
+  "archiveSha256": "1c364cb5792ff3dd140098d8bcc2015fac48596a5084d6a98063b38ab63a04cd",
   "indexSha256": "3644ccd9a8eced1aab2c39ed47350f5b1d2964c1b779f589e5d669dc6e80d867",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2904954,
+    "bytesReceived": 2905417,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.44.1",
+    "engineVersion": "1.47.0",
     "deployWarning": null
   },
   "liveVerification": {
