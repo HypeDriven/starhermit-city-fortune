@@ -623,6 +623,7 @@ export function applyLook(next: Look): void {
     vignette: { amount: 0.2, inner: 0.38, outer: 0.85 },
   } : null;
   renderer.antialias = next.antialias;
+  renderer.motionBlur = next.bloom !== null ? { intensity: 0.25, samples: 8, maxPixels: 16, targetFps: 60, camera: false } : null;
   if (cfg && theme) buildBoard(cfg, theme);
 }
 export function setReducedMotion(on: boolean): void { reducedMotion = on; if (on) camShake = 0; }
