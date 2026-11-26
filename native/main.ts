@@ -23,8 +23,8 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // presentation beats count them, so pauses, a hidden window and slow frames
 // never cost time and play scripts replay exactly.
 import "./classic.ts";
-import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate, clipboard } from "starhermit:engine";
-import { onAction, onPointerButton, onTouch, vibrate } from "starhermit:input";
+import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate, setTargetFps, clipboard } from "starhermit:engine";
+import { onAction, onPointerButton, onTouch, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, onPlayerChange, requestSignIn } from "starhermit:platform";
 import {
@@ -705,6 +705,17 @@ function applyLook(): void {
   render.applyLook(lookFor(levelSettings(f.level)));
 }
 
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on the title (its
+ * paper screen covers the board, which does not draw there) and on phone levels (levelIndex <= 3)
+ * under a finger; none otherwise. The round clock stays 60 fixed steps a second. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = app.screen === "title" || (frame().levelIndex <= 3 && primaryPointer() === "coarse") ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
+
 onStart(() => {
   showCursor();
   setFixedRate(60);
@@ -739,6 +750,7 @@ let frameDt = 0;
 onUpdate((dt) => {
   frameDt = dt;
   applyLook();
+  capFrames();
   audio.update();
   const t0 = now();
   if (app.caption && t0 > app.caption.until) app.caption = null;

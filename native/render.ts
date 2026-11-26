@@ -289,22 +289,26 @@ export function buildBoard(c: Cfg, t: Theme): void {
     table.rotation.x = -PI / 2;
     table.position.y = -0.145;
     table.receiveShadow = true;
+    table.movable = false;
     g.add(table);
   }
   const ground = new Mesh(new CylinderGeometry(1.85, 2.0, 0.08, seg(48, 40)), paperMat(p.ground, 1));
   ground.position.y = -0.1;
   ground.receiveShadow = true;
   ground.castShadow = true;
+  ground.movable = false;
   g.add(ground);
   const rim = new Mesh(new TorusGeometry(1.85, 0.035, seg(10, 6), seg(64, 40)), paperMat(p.edge, 0.8));
   rim.rotation.x = PI / 2;
   rim.position.y = -0.065;
   rim.castShadow = true;
+  rim.movable = false;
   g.add(rim);
   const ring = new Mesh(new RingGeometry(Game.BOARD.RING_R - 0.21, Game.BOARD.RING_R + 0.21, seg(64, 40)), paperMat(p.ring, 1));
   ring.rotation.x = -PI / 2;
   ring.position.y = -0.055;
   ring.receiveShadow = true;
+  ring.movable = false;
   g.add(ring);
 
   // tiles
@@ -339,6 +343,7 @@ export function buildBoard(c: Cfg, t: Theme): void {
       arch.position.y = FRAMING.TILE_H - 0.02;
       tg.add(arch);
     }
+    tg.movable = false; // the tile and its dressing never move
     g.add(tg);
     tileTops.push(top);
   }
@@ -362,6 +367,7 @@ export function buildBoard(c: Cfg, t: Theme): void {
     }
     b.position.set(Math.cos(a) * r, -0.05, Math.sin(a) * r);
     b.rotation.y = decor.next() * PI;
+    b.movable = false;
     g.add(b);
   }
 
