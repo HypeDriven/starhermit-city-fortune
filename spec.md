@@ -11,7 +11,7 @@ Present tense: this document describes what the shipped game does today. Anythin
 | Genre | Solo roll-and-move board game with a deterministic rival and album (set-collection) goals |
 | Players | 1 human; an optional scripted rival ("Penny", "Brick", "Moss", "Vela", "Cobalt") shares the circuit on alternating turns |
 | Session | 3–9 minutes per round (par times 240–560 s); a Learn lesson is under a minute |
-| Platforms | The StarHermit engine 1.51.0 (host API 1.51): natively in the StarHermit client, and in desktop and mobile browsers (portrait and landscape) through the engine's web runtime |
+| Platforms | The StarHermit engine 1.53.0 (host API 1.53): natively in the StarHermit client, and in desktop and mobile browsers (portrait and landscape) through the engine's web runtime |
 | Rendering | `starhermit:scene` (the three.js model) perspective scene of a circular paper board, its look per the runtime's graphics level; all UI is `starhermit:ui` (immediate mode) beside/over the playfield; a board list of tile buttons carries the same information as the 3D scene |
 | Hosting | One engine package (`starhermit.txt`, entry `native/main.ts`); browsers open the loader `index.html` that `npm run package` writes; on StarHermit the platform script is `score-script.js` (leaderboard posting); `server.js` (Node 18+, no dependencies) is a local dev server that verifies scores by replaying them (tests only) |
 
@@ -19,8 +19,8 @@ Present tense: this document describes what the shipped game does today. Anythin
 
 | Path | Owns |
 |---|---|
-| `starhermit.txt` | Manifest: name, description, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.51.0`, `engine.minor=51`, `engine.capabilities=platform,storage,clipboard`, ten `control.*` actions with `engine.gamepad.*` defaults and groups |
-| `index.html`, `starhermit-files.json` | The engine's web loader (pins 1.51.0 on engine.starhermit.com by hash) and the package's file index, written by `npm run package`; never edited by hand |
+| `starhermit.txt` | Manifest: name, description, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.53.0`, `engine.minor=53`, `engine.capabilities=platform,storage,clipboard`, ten `control.*` actions with `engine.gamepad.*` defaults and groups |
+| `index.html`, `starhermit-files.json` | The engine's web loader (pins 1.53.0 on engine.starhermit.com by hash) and the package's file index, written by `npm run package`; never edited by hand |
 | `native/main.ts` | Entry: navigation, command pipeline, event presentation on fixed steps, selection, round clock and time limits, lessons, results and achievements, input, lifecycle |
 | `native/screens.ts` | Every screen, the round's HUD and every dialog in `starhermit:ui`; the layouts (wide / compact / phone portrait / short landscape); drawn glyphs instead of symbol fonts |
 | `native/render.ts` | The paper city on `starhermit:scene`: board, tiles, pop-up decor, pawns, owner buildings, selection and build rings, confetti, the camera framed into the playfield (`setViewOffset`), picking |
@@ -365,16 +365,18 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.51.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.51.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.51 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its paper screen covers the table, which does not draw there) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.53 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its paper screen covers the table, which does not draw there) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery (host API 1.51).** The craft table, the board's ground, rim and ring, every tile (with its face, stripe and start arch) and the pop-up city's decor are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms. Pawns, owned buildings (they grow in), the marker, highlights, flecks and confetti stay movable.
+**Still scenery (host API 1.53).** The craft table, the board's ground, rim and ring, every tile (with its face, stripe and start arch) and the pop-up city's decor are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms. Pawns, owned buildings (they grow in), the marker, highlights, flecks and confetti stay movable.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
